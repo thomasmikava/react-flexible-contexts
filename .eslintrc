@@ -1,0 +1,47 @@
+{
+	"parser": "@typescript-eslint/parser",
+	"extends": [
+		"plugin:@typescript-eslint/recommended",
+		"plugin:prettier/recommended",
+		"prettier/@typescript-eslint",
+		"prettier/react"
+	],
+	"plugins": ["prettier", "@typescript-eslint"],
+	"rules": {
+		"@typescript-eslint/explicit-function-return-type": "off",
+		"indent": "off",
+		"@typescript-eslint/no-explicit-any": "off",
+		"@typescript-eslint/camelcase": "off",
+		"@typescript-eslint/interface-name-prefix": "off",
+		"@typescript-eslint/explicit-member-accessibility": "off",
+		"no-tabs": ["error", { "allowIndentationTabs": true }],
+		"comma-dangle": [
+			"error",
+			{
+				"arrays": "only-multiline",
+				"objects": "only-multiline",
+				"imports": "only-multiline",
+				"exports": "only-multiline",
+				"functions": "only-multiline"
+			}
+		],
+		"prettier/prettier": [
+			"error",
+			{
+				"trailingComma": "es5"
+			}
+		],
+		"@typescript-eslint/no-use-before-define": "off",
+		"@typescript-eslint/no-non-null-assertion": "off",
+		"@typescript-eslint/no-object-literal-type-assertion": "off",
+		"no-use-before-define": "off",
+		"react/react-in-jsx-scope": "off",
+		"prefer-const": [
+			"error",
+			{
+				"destructuring": "all"
+			}
+		],
+		"curly": ["error", "multi-line"]
+	}
+}

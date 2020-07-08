@@ -1,0 +1,73 @@
+Arguments: 
+  C:\Program Files\nodejs\node.exe C:\Program Files (x86)\Yarn\bin\yarn.js
+
+PATH: 
+  C:\Python27\;C:\Python27\Scripts;C:\WINDOWS\system32;C:\WINDOWS;C:\WINDOWS\System32\Wbem;C:\WINDOWS\System32\WindowsPowerShell\v1.0\;C:\WINDOWS\System32\OpenSSH\;C:\Program Files\nodejs\;C:\ProgramData\chocolatey\bin;C:\Program Files\Git\cmd;C:\Program Files\PuTTY\;C:\Program Files (x86)\Yarn\bin\;C:\Program Files (x86)\Calibre2\;C:\Program Files\Amazon\AWSCLIV2\;C:\Program Files\Docker\Docker\resources\bin;C:\ProgramData\DockerDesktop\version-bin;C:\Users\koddd\AppData\Local\Microsoft\WindowsApps;C:\Users\koddd\AppData\Roaming\npm;C:\Users\koddd\AppData\Local\Yarn\bin;C:\Users\koddd\AppData\Local\Programs\Microsoft VS Code\bin;C:\xampp\mysql\bin;C:\Program Files\MongoDB\Server\4.2\bin;C:\FFmpeg\bin;
+
+Yarn version: 
+  1.22.4
+
+Node version: 
+  11.15.0
+
+Platform: 
+  win32 x64
+
+Trace: 
+  SyntaxError: C:\nodejs\packages\react-flexible-contexts\package.json: Unexpected token } in JSON at position 504
+      at JSON.parse (<anonymous>)
+      at C:\Program Files (x86)\Yarn\lib\cli.js:1625:59
+      at Generator.next (<anonymous>)
+      at step (C:\Program Files (x86)\Yarn\lib\cli.js:310:30)
+      at C:\Program Files (x86)\Yarn\lib\cli.js:321:13
+
+npm manifest: 
+  {
+    "name": "react-flexible-contexts",
+    "version": "0.0.1",
+    "description": "",
+    "main": "lib/index.js",
+    "types": "lib/index.d.ts",
+    "scripts": {
+      "test": "echo \"Error: no test specified\" && exit 1",
+      "build": "tsc",
+      "prepare": "npm run build"
+    },
+    "repository": {
+      "type": "git",
+      "url": "git+https://github.com/thomasmikava/react-flexible-contexts.git"
+    },
+    "keywords": [],
+    "author": "Temuri Mikava",
+    "license": "MIT",
+    "peerDependencies": {
+      "react": ">=16.8.0",
+    },
+    "devDependencies": {
+      "@typescript-eslint/eslint-plugin": "^2.17.0",
+      "@typescript-eslint/parser": "^2.17.0",
+      "eslint": "^6.8.0",
+      "eslint-config-prettier": "^6.9.0",
+      "eslint-plugin-import": "^2.20.0",
+      "eslint-plugin-jsx-a11y": "^6.2.3",
+      "eslint-plugin-prettier": "^3.1.2",
+      "eslint-plugin-react": "^7.18.0",
+      "eslint-plugin-react-hooks": "^2.3.0",
+      "prettier": "^1.19.1",
+      "typescript": "^3.7.5",
+      "react": "^16.12.0",
+    },
+    "publishConfig": {
+      "access": "public"
+    },
+    "homepage": "https://github.com/thomasmikava/react-flexible-contexts.git",
+    "files": [
+      "lib/**/*"
+    ]
+  }
+
+yarn manifest: 
+  No manifest
+
+Lockfile: 
+  No lockfile
