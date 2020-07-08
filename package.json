@@ -1,0 +1,44 @@
+{
+  "name": "react-flexible-contexts",
+  "version": "0.0.1",
+  "description": "",
+  "main": "lib/index.js",
+  "types": "lib/index.d.ts",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "build": "tsc",
+    "prepare": "npm run build"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/thomasmikava/react-flexible-contexts.git"
+  },
+  "keywords": [],
+  "author": "Temuri Mikava",
+  "license": "MIT",
+  "peerDependencies": {
+    "react": ">=16.8.0"
+  },
+  "devDependencies": {
+    "@typescript-eslint/eslint-plugin": "^2.17.0",
+    "@typescript-eslint/parser": "^2.17.0",
+    "eslint": "^6.8.0",
+    "eslint-config-prettier": "^6.9.0",
+    "eslint-plugin-import": "^2.20.0",
+    "eslint-plugin-jsx-a11y": "^6.2.3",
+    "eslint-plugin-prettier": "^3.1.2",
+    "eslint-plugin-react": "^7.18.0",
+    "eslint-plugin-react-hooks": "^2.3.0",
+    "prettier": "^1.19.1",
+    "typescript": "^3.7.5",
+    "react": "^16.12.0",
+    "@types/react": "16.9.41"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "homepage": "https://github.com/thomasmikava/react-flexible-contexts.git",
+  "files": [
+    "lib/**/*"
+  ]
+}
