@@ -4,7 +4,7 @@ import {
 	ContextSubscriberMiniHook,
 	ContextSubscriberHook,
 } from "./subscriber/interfaces";
-import { nestData } from "./utils";
+import { nestData, useNestedData } from "./utils";
 
 export {
 	DynamicContext,
@@ -12,4 +12,5 @@ export {
 	ContextSubscriberMiniHook,
 	ContextSubscriberHook,
 	nestData,
+	useNestedData,
 };

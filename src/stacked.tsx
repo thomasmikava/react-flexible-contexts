@@ -1,57 +1,57 @@
-import React, { useContext, useMemo } from "react";
-import { DynamicContext } from "./dynamic";
-
-const EMPTY_VAL = `__$$emptyValue:DCgPBc^T#6@n_9fr]4;{pp#wKJh:{^edH/82PeH)72U/*aYWzhj#Ck,ffysw%<N?%zjDg$$`;
+import React, { useContext } from "react";
+import { DynamicContext, DefSubscriberVal } from "./dynamic";
+import { EMPTY_VAL } from "./constanst";
 
 export class StackedContext<
 	Value extends Record<any, any>,
-	ValueWithMeta extends {
-		value: Value;
-		meta: any;
-	} = {
-		value: Value;
-		meta: any;
-	},
-	FinalValue = Value
+	FinalValue = Value,
+	ContextSubscriberValue extends readonly any[] = DefSubscriberVal<
+		Value,
+		FinalValue
+	>
 > {
-	private readonly finalTransformationHook?: (
-		data: ValueWithMeta
-	) => FinalValue;
-	readonly dynamicContext: DynamicContext<ValueWithMeta, "value", FinalValue>;
+	readonly dynamicContext: DynamicContext<
+		Value,
+		"value",
+		FinalValue,
+		ContextSubscriberValue
+	>;
 	readonly hook: () => FinalValue;
 
 	constructor({
-		finalTransformationHook,
 		displayName,
 		context,
 		defaultValue,
-		defaultMeta,
+		options,
 	}: {
-		finalTransformationHook?: (data: ValueWithMeta) => FinalValue;
 		displayName?: string;
+		options?: {
+			transformationHook?: (data: Value) => FinalValue;
+			contextSubscriberValueHook?: (
+				finalValue: FinalValue,
+				value: Value
+			) => ContextSubscriberValue;
+			contextSubscriberEqualityFn?: (
+				prevValue: ContextSubscriberValue,
+				nextValue: ContextSubscriberValue
+			) => boolean;
+		};
 	} & (
 		| {
-				context: React.Context<ValueWithMeta>;
+				context: React.Context<Value>;
 				defaultValue?: undefined;
-				defaultMeta?: undefined;
 		  }
-		| { defaultValue: Value | null; defaultMeta: any; context?: undefined }
+		| { defaultValue: Value | null; context?: undefined }
 	)) {
 		if (!context) {
-			context = React.createContext({
-				value: ((defaultValue ?? EMPTY_VAL) as any) as Value,
-				meta: defaultMeta,
-			} as ValueWithMeta);
+			context = React.createContext(
+				((defaultValue ?? EMPTY_VAL) as any) as Value
+			);
 		}
 		if (typeof displayName !== "undefined") {
 			context.displayName = displayName;
 		}
-		this.finalTransformationHook = finalTransformationHook;
-		this.dynamicContext = new DynamicContext(
-			context,
-			"value",
-			this.rawValueToFinal
-		);
+		this.dynamicContext = new DynamicContext(context, "value", options);
 		this.hook = this.dynamicContext.hook;
 	}
 
@@ -60,10 +60,7 @@ export class StackedContext<
 	}
 
 	addProvider<
-		OutHook extends (
-			inArg: any,
-			prevProviderValue: ValueWithMeta
-		) => ValueWithMeta
+		OutHook extends (inArg: any, prevProviderValue: Value) => Value
 	>(outValueHook: OutHook): any {
 		type In = Parameters<OutHook>[0];
 		const component: React.FC<{ value: In }> = ({
@@ -82,53 +79,9 @@ export class StackedContext<
 		};
 		return component;
 	}
-
-	static wrapInMeta = <Data, TransformedData>(
-		getValueHook: (
-			customizations: Data,
-			prevVal: TransformedData
-		) => TransformedData,
-		getCurrentMetaHook: (customizations: Data, prevMeta: any) => any
-	): ((
-		customizations: Data,
-		prevVal: WithStackedMeta<TransformedData>
-	) => WithStackedMeta<TransformedData>) => {
-		return (
-			customizations: Data,
-			prevValWithMeta: WithStackedMeta<TransformedData>
-		) => {
-			const currentMeta = getCurrentMetaHook(
-				customizations,
-				prevValWithMeta.meta
-			);
-			const meta = useMemo(() => {
-				return [currentMeta, ...(prevValWithMeta.meta || [])];
-			}, [currentMeta, prevValWithMeta.meta]);
-			const value = getValueHook(customizations, prevValWithMeta.value);
-			return useMemo(
-				(): WithStackedMeta<TransformedData> => ({
-					meta,
-					value,
-				}),
-				[meta, value]
-			);
-		};
-	};
-
-	private rawValueToFinal = (rawValue: ValueWithMeta): FinalValue => {
-		if (this.finalTransformationHook) {
-			return this.finalTransformationHook(rawValue);
-		}
-		return rawValue.value as FinalValue;
-	};
 }
 
 const toArray = <T extends any>(el: T): T extends any[] ? T : [T] => {
 	if (Array.isArray(el)) return el as any;
 	return [el] as any;
 };
-
-interface WithStackedMeta<V> {
-	value: V;
-	meta: any[];
-}

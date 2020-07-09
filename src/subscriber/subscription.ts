@@ -1,5 +1,5 @@
-export class Subscription<T, Meta = {}> {
-	private subscribers: ((data: T) => void)[];
+export class Subscription<T extends readonly any[], Meta = {}> {
+	private subscribers: ((...data: T) => void)[];
 	private metaData: Meta;
 
 	constructor(defaultMetaData?: Meta) {
@@ -20,17 +20,17 @@ export class Subscription<T, Meta = {}> {
 		return this.metaData;
 	};
 
-	subscribe = <L extends T = T>(fn: (data: L) => void): Unsubscribe => {
+	subscribe = <L extends T = T>(fn: (...data: L) => void): Unsubscribe => {
 		this.subscribers.push(fn);
 		return () => {
 			this.subscribers = this.subscribers.filter(e => e !== fn);
 		};
 	};
 
-	broadcast = (data: T) => {
+	broadcast = (...data: T) => {
 		const arr = this.subscribers;
 		for (const fn of arr) {
-			fn(data);
+			fn(...data);
 		}
 	};
 

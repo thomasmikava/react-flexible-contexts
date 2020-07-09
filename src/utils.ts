@@ -1,3 +1,5 @@
+import { useMemo } from "react";
+
 export const createNestDataFn = <
 	Args extends readonly (string | number | symbol)[]
 >(
@@ -8,13 +10,25 @@ export const createNestDataFn = <
 	};
 };
 
-export const nestData = <
+export const createNestDataHook = <
+	Args extends readonly (string | number | symbol)[]
+>(
+	pathKeys: Args
+) => {
+	return <Data extends any>(data: Data) => {
+		return useNestedData(data, pathKeys);
+	};
+};
+
+type nestDataFnType = <
 	Data extends any,
 	Args extends readonly (string | number | symbol)[]
 >(
 	data: Data,
 	pathKeys: Args
-): ToNestedObj<Data, Args> => {
+) => ToNestedObj<Data, Args>;
+
+export const nestData: nestDataFnType = (data, pathKeys) => {
 	if (pathKeys.length < 1) return data as any;
 	const obj: any = {};
 	let lastObj = obj;
@@ -27,6 +41,10 @@ export const nestData = <
 		lastObj = lastObj[key];
 	}
 	return obj;
+};
+
+export const useNestedData: nestDataFnType = (data, pathKeys) => {
+	return useMemo(() => nestData(data, pathKeys), [data, ...pathKeys]);
 };
 
 type ToNestedObj<

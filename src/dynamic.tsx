@@ -1,19 +1,27 @@
 import React, { useContext, useRef, useState, useEffect } from "react";
 import { ContextSubscriber } from "./subscriber";
 import { ContextSubscriberHook } from "./subscriber/interfaces";
-const EMPTY_VAL = `__$$emptyValue:?#@#y7q!}fmhW)eL}L{b#b^(3$ZAMg.eyp6NL#h<N-S$)L<.=-j3WsMp&%2JDf6_vVdN7K."pg"_aswq"9CRS?!9YzG[}AD~Xb[E__$$`;
+import { EMPTY_VAL } from "./constanst";
 
 export class DynamicContext<
 	Value extends any,
 	Key extends string | null,
-	FinalValue = Value
+	FinalValue = Value,
+	ContextSubscriberValue extends readonly any[] = DefSubscriberVal<
+		Value,
+		FinalValue
+	>
 > {
 	readonly hook: () => FinalValue;
 	private readonly RawProvider: MinimalComponent<any>;
 	private transformationHook: (data: Value) => FinalValue;
-	private subscriberContext: ContextSubscriber<FinalValue>;
+	private subscriberContext: ContextSubscriber<ContextSubscriberValue>;
 
-	readonly useSubscriber: ContextSubscriberHook<FinalValue>;
+	readonly useSubscriber: ContextSubscriberHook<ContextSubscriberValue>;
+	private readonly contextSubscriberValueHook: (
+		finalValue: FinalValue,
+		value: Value
+	) => ContextSubscriberValue;
 
 	private InternalHooks = {
 		version: 0,
@@ -23,12 +31,25 @@ export class DynamicContext<
 	constructor(
 		public readonly mainContext: React.Context<Value>,
 		private readonly key?: Key,
-		transformationHook?: (data: Value) => FinalValue
+		options?: {
+			transformationHook?: (data: Value) => FinalValue;
+			contextSubscriberValueHook?: (
+				finalValue: FinalValue,
+				value: Value
+			) => ContextSubscriberValue;
+			contextSubscriberEqualityFn?: (
+				prevValue: ContextSubscriberValue,
+				nextValue: ContextSubscriberValue
+			) => boolean;
+		}
 	) {
 		if (key === "undefined") {
 			key = "value" as Key;
 			this.key = key;
 		}
+		const transformationHook = options
+			? options.transformationHook
+			: undefined;
 		this.transformationHook =
 			transformationHook || ((x: Value) => (x as any) as FinalValue);
 		this.hook = DynamicContext.createHookFromContext<Value, FinalValue>(
@@ -36,8 +57,22 @@ export class DynamicContext<
 			this.transformationHook
 		);
 		this.RawProvider = this.getRawProvider();
-		this.subscriberContext = new ContextSubscriber<FinalValue>();
+		let contextSubscriberEqualityFn = options
+			? options.contextSubscriberEqualityFn
+			: undefined;
+		const contextSubscriberValueHook = options
+			? options.contextSubscriberValueHook
+			: undefined;
+		if (!contextSubscriberValueHook) {
+			contextSubscriberEqualityFn = defaultContextSubscriberEqualityFn;
+		}
+		this.subscriberContext = new ContextSubscriber<ContextSubscriberValue>(
+			contextSubscriberEqualityFn
+		);
 		this.useSubscriber = this.subscriberContext.useSubscriber;
+		this.contextSubscriberValueHook =
+			contextSubscriberValueHook ||
+			(defaultContextSubscriberValueHook as any);
 	}
 
 	setContextName(name: string | undefined) {
@@ -66,9 +101,13 @@ export class DynamicContext<
 		const RawProvider = this.RawProvider;
 		const realRawValue = this.reconstructValue(props);
 		const realValue = this.transformationHook(realRawValue);
+		const contextSubscriberValue = this.contextSubscriberValueHook(
+			realValue,
+			realRawValue
+		);
 		this.subscriberContext.updateLastProviderValue(
 			internalContextData.id,
-			realValue
+			...contextSubscriberValue
 		);
 		let lastChildren = children;
 		for (const el of this.InternalHooks.arr) {
@@ -160,45 +199,94 @@ export class DynamicContext<
 	static createContext<
 		Value extends any,
 		K extends string | null,
-		FinalValue = Value
+		FinalValue = Value,
+		ContextSubscriberValue extends readonly any[] = [
+			FinalValue,
+			() => Value
+		]
 	>(
 		defaultValue: Value | undefined,
 		key: K,
-		transformationHook?: (data: Value) => FinalValue
+		options?: {
+			transformationHook?: (data: Value) => FinalValue;
+			contextSubscriberValueHook?: (
+				finalValue: FinalValue,
+				value: Value
+			) => ContextSubscriberValue;
+			contextSubscriberEqualityFn?: (
+				prevValue: ContextSubscriberValue,
+				nextValue: ContextSubscriberValue
+			) => boolean;
+		}
 	): DynamicContext<Value, K, FinalValue>;
-	static createContext<Value extends any, FinalValue = Value>(
+	static createContext<
+		Value extends any,
+		FinalValue = Value,
+		ContextSubscriberValue extends readonly any[] = [
+			FinalValue,
+			() => Value
+		]
+	>(
 		defaultValue?: Value,
 		key?: undefined | "value",
-		transformationHook?: (data: Value) => FinalValue
+		options?: {
+			transformationHook?: (data: Value) => FinalValue;
+			contextSubscriberValueHook?: (
+				finalValue: FinalValue,
+				value: Value
+			) => ContextSubscriberValue;
+			contextSubscriberEqualityFn?: (
+				prevValue: ContextSubscriberValue,
+				nextValue: ContextSubscriberValue
+			) => boolean;
+		}
 	): DynamicContext<Value, "value", FinalValue>;
 	static createContext<Value extends any, FinalValue = Value>(
 		defaultValue?: Value,
 		key = "value",
-		transformationHook?: (data: Value) => FinalValue
+		options?: any
 	): any {
 		const RawContext = React.createContext(
 			((typeof defaultValue === "undefined"
 				? EMPTY_VAL
 				: defaultValue) as any) as Value
 		);
-		return new DynamicContext(RawContext, key, transformationHook);
+		return new DynamicContext(RawContext, key, options);
 	}
 
-	static createContextForDestructured<Value extends {}, FinalValue = Value>(
+	static createContextForDestructured<
+		Value extends Record<any, any>,
+		FinalValue = Value,
+		ContextSubscriberValue extends readonly any[] = [
+			FinalValue,
+			() => Value
+		]
+	>(
 		defaultValue?: Value,
-		transformationHook?: (data: Value) => FinalValue
-	): DynamicContext<Value, null, FinalValue> {
+		options?: {
+			transformationHook?: (data: Value) => FinalValue;
+			contextSubscriberValueHook?: (
+				finalValue: FinalValue,
+				value: Value
+			) => ContextSubscriberValue;
+			contextSubscriberEqualityFn?: (
+				prevValue: ContextSubscriberValue,
+				nextValue: ContextSubscriberValue
+			) => boolean;
+		}
+	): DynamicContext<Value, null, FinalValue, ContextSubscriberValue> {
 		const RawContext = React.createContext(
 			((typeof defaultValue === "undefined"
 				? EMPTY_VAL
 				: defaultValue) as any) as Value
 		);
 
-		return new DynamicContext<Value, null, FinalValue>(
-			RawContext,
+		return new DynamicContext<
+			Value,
 			null,
-			transformationHook
-		);
+			FinalValue,
+			ContextSubscriberValue
+		>(RawContext, null, options);
 	}
 
 	private static createDestructuredProvider<Value extends {}>(
@@ -248,3 +336,22 @@ interface HookInfo<Value extends any, R extends any> {
 }
 
 type Destroy = () => void;
+
+const defaultContextSubscriberValueHook = <
+	FinalValue extends any,
+	Value extends any
+>(
+	finalValue: FinalValue,
+	rawValue: Value
+) => {
+	return [finalValue, () => rawValue] as const;
+};
+
+const defaultContextSubscriberEqualityFn = <T extends readonly any[]>(
+	prevVal: T,
+	newVal: T
+) => {
+	return prevVal[0] === newVal[0];
+};
+
+export type DefSubscriberVal<Value, FinalValue> = [FinalValue, () => Value];

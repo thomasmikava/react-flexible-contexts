@@ -11,17 +11,17 @@ const EMPTY_DEPS = [
 	`__$$EMPTY:%$W,w_&te-nw~[rzSETQK5{CB9V?F&+8n_m\nFZB?:fW]Y2QG$$__`,
 ];
 
-const defaultTransformer = <T>(x: T) => x;
-export const createContextSubscriberHook = <Data>(
+const defaultTransformer = <T extends readonly any[]>(...x: T) => x;
+export const createContextSubscriberHook = <Data extends readonly any[]>(
 	context: React.Context<ContextSubscraberValue<Data>>
 ): ContextSubscriberHook<Data> => {
 	function useContextValue();
 	function useContextValue<T>(
-		fn: (rootData: Data) => T,
+		fn: (...rootData: Data) => T,
 		deps?: DependencyList | null
 	);
 	function useContextValue<T>(
-		fn: (rootData: Data) => T,
+		fn: (...rootData: Data) => T,
 		areDataEqual?: (prevValue: T, newValue: T) => boolean,
 		deps?: DependencyList | null
 	);
@@ -31,7 +31,7 @@ export const createContextSubscriberHook = <Data>(
 			newValue: T
 		) => boolean = shallowCompare;
 		let deps: DependencyList | null = [];
-		const fn: (rootData: Data) => any = args[0]
+		const fn: (...rootData: Data) => any = args[0]
 			? args[0]
 			: defaultTransformer;
 
@@ -46,6 +46,9 @@ export const createContextSubscriberHook = <Data>(
 			}
 		}
 		if (deps === undefined) deps = [];
+		if (!args[0]) {
+			areDataEqual = shallowCompareArr as any;
+		}
 
 		const fnRef = useRef(fn);
 		fnRef.current = fn;
@@ -56,13 +59,13 @@ export const createContextSubscriberHook = <Data>(
 
 		const { getLatestValue, subscribe } = useContext(context);
 		const [transformedInitialValue] = useState(() => {
-			return fn(getLatestValue());
+			return fn(...getLatestValue());
 		});
 		const transformedValueRef = useRef(transformedInitialValue);
 
 		useLayoutEffect(() => {
-			return subscribe(data => {
-				const value = fnRef.current(data);
+			return subscribe((...data) => {
+				const value = fnRef.current(...data);
 				if (areDataEqual(transformedValueRef.current, value)) {
 					return;
 				}
@@ -72,7 +75,7 @@ export const createContextSubscriberHook = <Data>(
 		}, [subscribe]);
 
 		useCustomMemoHook(() => {
-			const value = fnRef.current(getLatestValue());
+			const value = fnRef.current(...getLatestValue());
 			if (areDataEqual(transformedValueRef.current, value)) return;
 			transformedValueRef.current = value;
 			setTimeout(forceUpdate, 1);
@@ -80,15 +83,28 @@ export const createContextSubscriberHook = <Data>(
 
 		return transformedValueRef.current;
 	}
-	(useContextValue as ContextSubscriberHook<Data>).extendHook = function<T>(
-		fn: (rootData: Data) => T
-	): any {
+	(useContextValue as ContextSubscriberHook<Data>).extendHook = function<
+		T extends readonly any[]
+	>(fn: (...rootData: Data) => T): any {
 		const hook = createContextSubscriberHook(context) as any;
-		const finalHook = (secFn = defaultTransformer, ...args) => {
-			return hook(rootData => secFn(fn(rootData)), ...args);
+		const finalHook = (trans, ...args) => {
+			if (!trans) {
+				return hook(
+					(...rootData) =>
+						fn(...((rootData as unknown) as Data)),
+						shallowCompareArr,
+					[]);
+			}
+			return hook(
+				(...rootData) =>
+					trans(...fn(...((rootData as unknown) as Data))),
+				...args
+			);
 		};
 		finalHook.extendHook = someFn =>
-			hook.extendHook(data => someFn(fn(data)));
+			hook.extendHook((...data) =>
+				someFn(...fn(...((data as unknown) as Data)))
+			);
 		return finalHook;
 	};
 	return useContextValue as any;
@@ -96,6 +112,17 @@ export const createContextSubscriberHook = <Data>(
 
 const shallowCompare = <T>(prev: T, next: T) => {
 	return prev === next;
+};
+
+const shallowCompareArr = <T extends any>(prev: T, next: T) => {
+	if (!Array.isArray(prev) || !Array.isArray(next)) {
+		return prev === next;
+	}
+	if (prev.length !== next.length) return false;
+	for (let i = 0; i < prev.length; ++i) {
+		if (prev[i] !== next[i]) return false;
+	}
+	return true;
 };
 
 const useCustomMemoHook = createMemoHook((oldDeps: any[], newDeps: any[]) => {
