@@ -90,10 +90,10 @@ export const createContextSubscriberHook = <Data extends readonly any[]>(
 		const finalHook = (trans, ...args) => {
 			if (!trans) {
 				return hook(
-					(...rootData) =>
-						fn(...((rootData as unknown) as Data)),
-						shallowCompareArr,
-					[]);
+					(...rootData) => fn(...((rootData as unknown) as Data)),
+					shallowCompareArr,
+					[]
+				);
 			}
 			return hook(
 				(...rootData) =>

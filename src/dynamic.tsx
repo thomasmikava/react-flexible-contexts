@@ -1,41 +1,42 @@
 import React, { useContext, useRef, useState, useEffect } from "react";
 import { ContextSubscriber } from "./subscriber";
 import { ContextSubscriberHook } from "./subscriber/interfaces";
-import { EMPTY_VAL } from "./constanst";
+
+const EMPTY_VAL = `__$$emptyValue:?#@#y7q!}fmhW)eL}L{b#b^(3$ZAMg.eyp6NL#h<N-S$)L<.=-j3WsMp&%2JDf6_vVdN7K."pg"_aswq"9CRS?!9YzG[}AD~Xb[E__$$`;
 
 export class DynamicContext<
-	Value extends any,
+	RawValue extends any,
 	Key extends string | null,
-	FinalValue = Value,
+	Value = RawValue,
 	ContextSubscriberValue extends readonly any[] = DefSubscriberVal<
-		Value,
-		FinalValue
+		RawValue,
+		Value
 	>
 > {
-	readonly hook: () => FinalValue;
+	readonly useValue: () => Value;
 	private readonly RawProvider: MinimalComponent<any>;
-	private transformationHook: (data: Value) => FinalValue;
+	private transformationHook: (data: RawValue) => Value;
 	private subscriberContext: ContextSubscriber<ContextSubscriberValue>;
 
 	readonly useSubscriber: ContextSubscriberHook<ContextSubscriberValue>;
 	private readonly contextSubscriberValueHook: (
-		finalValue: FinalValue,
-		value: Value
+		value: Value,
+		rawValue: RawValue
 	) => ContextSubscriberValue;
 
 	private InternalHooks = {
 		version: 0,
-		arr: [] as HookInfo<FinalValue, any>[],
+		arr: [] as HookInfo<Value, any>[],
 	};
 
 	constructor(
-		public readonly mainContext: React.Context<Value>,
+		public readonly mainContext: React.Context<RawValue>,
 		private readonly key?: Key,
 		options?: {
-			transformationHook?: (data: Value) => FinalValue;
+			transformationHook?: (data: RawValue) => Value;
 			contextSubscriberValueHook?: (
-				finalValue: FinalValue,
-				value: Value
+				value: Value,
+				rawValue: RawValue
 			) => ContextSubscriberValue;
 			contextSubscriberEqualityFn?: (
 				prevValue: ContextSubscriberValue,
@@ -51,8 +52,8 @@ export class DynamicContext<
 			? options.transformationHook
 			: undefined;
 		this.transformationHook =
-			transformationHook || ((x: Value) => (x as any) as FinalValue);
-		this.hook = DynamicContext.createHookFromContext<Value, FinalValue>(
+			transformationHook || ((x: RawValue) => (x as any) as Value);
+		this.useValue = DynamicContext.createHookFromContext<RawValue, Value>(
 			this.mainContext,
 			this.transformationHook
 		);
@@ -79,15 +80,19 @@ export class DynamicContext<
 		this.mainContext.displayName = name;
 	}
 
+	useRawValue = () => {
+		return useContext(this.mainContext);
+	};
+
 	Provider: MinimalComponent<
-		Key extends string ? Record<Key, Value> : Value
+		Key extends string ? Record<Key, RawValue> : RawValue
 	> = (props: any) => {
 		const Provider = this.providerHelper;
 		return <Provider {...props} key={this.InternalHooks.version} />;
 	};
 
 	private providerHelper: MinimalComponent<
-		Key extends string ? Record<Key, Value> : Value
+		Key extends string ? Record<Key, RawValue> : RawValue
 	> = ({ children, ...props }: any) => {
 		const [internalContextData] = useState(
 			this.subscriberContext.registerNewProvider
@@ -123,14 +128,14 @@ export class DynamicContext<
 		);
 	};
 
-	private reconstructValue(props: any): Value {
+	private reconstructValue(props: any): RawValue {
 		if (typeof this.key === "string") {
 			return props[this.key];
 		}
 		return props;
 	}
 
-	addInternalContext<Fn extends (value: FinalValue) => any>(
+	addInternalContext<Fn extends (value: Value) => any>(
 		fn: Fn,
 		displayName?: string
 	): DynamicContext<ReturnType<Fn>, "value"> & { destroy: Destroy } {
@@ -142,7 +147,7 @@ export class DynamicContext<
 			context,
 			"value"
 		) as DynamicContext<ReturnType<Fn>, "value"> & { destroy: Destroy };
-		const el: HookInfo<FinalValue, R> = {
+		const el: HookInfo<Value, R> = {
 			fn,
 			dynamicContext,
 		};
@@ -162,8 +167,8 @@ export class DynamicContext<
 		if (this.key === "value") return RawContextProvider;
 
 		if (typeof this.key === "string") {
-			const Provider: React.FC<Record<string, Value>> = props => {
-				const value = props[this.key as any] as Value;
+			const Provider: React.FC<Record<string, RawValue>> = props => {
+				const value = props[this.key as any] as RawValue;
 				const children = props.children;
 				return (
 					<RawContextProvider value={value}>
@@ -180,111 +185,102 @@ export class DynamicContext<
 		return Provider;
 	}
 
-	static createHookFromContext<T, FinalT = T>(
-		context: React.Context<T>,
-		transformationHook?: (rawData: T) => FinalT
-	): () => FinalT {
+	static createHookFromContext<RawValue, Value = RawValue>(
+		context: React.Context<RawValue>,
+		transformationHook?: (rawData: RawValue) => Value
+	): () => Value {
 		return () => {
-			const val = useContext(context);
-			if ((val as any) === EMPTY_VAL) {
+			const rawValue = useContext(context);
+			if ((rawValue as any) === EMPTY_VAL) {
 				throw new Error(
 					"Dynamic Context without deafult value must have a provider"
 				);
 			}
-			if (transformationHook) return transformationHook(val);
-			return (val as any) as FinalT;
+			if (transformationHook) return transformationHook(rawValue);
+			return (rawValue as any) as Value;
 		};
 	}
 
-	static createContext<
-		Value extends any,
+	static create<
+		RawValue extends any,
 		K extends string | null,
-		FinalValue = Value,
-		ContextSubscriberValue extends readonly any[] = [
-			FinalValue,
-			() => Value
-		]
+		Value = RawValue,
+		ContextSubscriberValue extends readonly any[] = [Value, () => RawValue]
 	>(
-		defaultValue: Value | undefined,
+		defaultValue: RawValue | undefined,
 		key: K,
 		options?: {
-			transformationHook?: (data: Value) => FinalValue;
+			transformationHook?: (data: RawValue) => Value;
 			contextSubscriberValueHook?: (
-				finalValue: FinalValue,
-				value: Value
+				value: Value,
+				rawValue: RawValue
 			) => ContextSubscriberValue;
 			contextSubscriberEqualityFn?: (
 				prevValue: ContextSubscriberValue,
 				nextValue: ContextSubscriberValue
 			) => boolean;
 		}
-	): DynamicContext<Value, K, FinalValue>;
-	static createContext<
-		Value extends any,
-		FinalValue = Value,
-		ContextSubscriberValue extends readonly any[] = [
-			FinalValue,
-			() => Value
-		]
+	): DynamicContext<RawValue, K, Value>;
+	static create<
+		RawValue extends any,
+		Value = RawValue,
+		ContextSubscriberValue extends readonly any[] = [Value, () => RawValue]
 	>(
-		defaultValue?: Value,
+		defaultValue?: RawValue,
 		key?: undefined | "value",
 		options?: {
-			transformationHook?: (data: Value) => FinalValue;
+			transformationHook?: (data: RawValue) => Value;
 			contextSubscriberValueHook?: (
-				finalValue: FinalValue,
-				value: Value
+				value: Value,
+				rawValue: RawValue
 			) => ContextSubscriberValue;
 			contextSubscriberEqualityFn?: (
 				prevValue: ContextSubscriberValue,
 				nextValue: ContextSubscriberValue
 			) => boolean;
 		}
-	): DynamicContext<Value, "value", FinalValue>;
-	static createContext<Value extends any, FinalValue = Value>(
-		defaultValue?: Value,
+	): DynamicContext<RawValue, "value", Value>;
+	static create<RawValue extends any, Value = RawValue>(
+		defaultValue?: RawValue,
 		key = "value",
 		options?: any
 	): any {
 		const RawContext = React.createContext(
 			((typeof defaultValue === "undefined"
 				? EMPTY_VAL
-				: defaultValue) as any) as Value
+				: defaultValue) as any) as RawValue
 		);
 		return new DynamicContext(RawContext, key, options);
 	}
 
-	static createContextForDestructured<
-		Value extends Record<any, any>,
-		FinalValue = Value,
-		ContextSubscriberValue extends readonly any[] = [
-			FinalValue,
-			() => Value
-		]
+	static createDestructured<
+		RawValue extends Record<any, any>,
+		Value = RawValue,
+		ContextSubscriberValue extends readonly any[] = [Value, () => RawValue]
 	>(
-		defaultValue?: Value,
+		defaultValue?: RawValue,
 		options?: {
-			transformationHook?: (data: Value) => FinalValue;
+			transformationHook?: (data: RawValue) => Value;
 			contextSubscriberValueHook?: (
-				finalValue: FinalValue,
-				value: Value
+				value: Value,
+				rawValue: RawValue
 			) => ContextSubscriberValue;
 			contextSubscriberEqualityFn?: (
 				prevValue: ContextSubscriberValue,
 				nextValue: ContextSubscriberValue
 			) => boolean;
 		}
-	): DynamicContext<Value, null, FinalValue, ContextSubscriberValue> {
+	): DynamicContext<RawValue, null, Value, ContextSubscriberValue> {
 		const RawContext = React.createContext(
 			((typeof defaultValue === "undefined"
 				? EMPTY_VAL
-				: defaultValue) as any) as Value
+				: defaultValue) as any) as RawValue
 		);
 
 		return new DynamicContext<
-			Value,
+			RawValue,
 			null,
-			FinalValue,
+			Value,
 			ContextSubscriberValue
 		>(RawContext, null, options);
 	}
@@ -338,13 +334,13 @@ interface HookInfo<Value extends any, R extends any> {
 type Destroy = () => void;
 
 const defaultContextSubscriberValueHook = <
-	FinalValue extends any,
-	Value extends any
+	Value extends any,
+	RawValue extends any
 >(
-	finalValue: FinalValue,
-	rawValue: Value
+	value: Value,
+	rawValue: RawValue
 ) => {
-	return [finalValue, () => rawValue] as const;
+	return [value, () => rawValue] as const;
 };
 
 const defaultContextSubscriberEqualityFn = <T extends readonly any[]>(
@@ -354,4 +350,4 @@ const defaultContextSubscriberEqualityFn = <T extends readonly any[]>(
 	return prevVal[0] === newVal[0];
 };
 
-export type DefSubscriberVal<Value, FinalValue> = [FinalValue, () => Value];
+export type DefSubscriberVal<RawValue, Value> = [Value, () => RawValue];

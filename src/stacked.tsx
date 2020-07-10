@@ -1,78 +1,101 @@
-import React, { useContext } from "react";
-import { DynamicContext, DefSubscriberVal } from "./dynamic";
-import { EMPTY_VAL } from "./constanst";
+import React from "react";
+import { DynamicContext } from ".";
+import { DefSubscriberVal } from "./dynamic";
 
 export class StackedContext<
-	Value extends Record<any, any>,
-	FinalValue = Value,
-	ContextSubscriberValue extends readonly any[] = DefSubscriberVal<
+	RawValue extends any,
+	Value = RawValue,
+	InternalContext extends StackInternalContext<
 		Value,
-		FinalValue
-	>
+		RawValue
+	> = StackInternalContext<Value, RawValue>
 > {
-	readonly dynamicContext: DynamicContext<
-		Value,
-		"value",
-		FinalValue,
-		ContextSubscriberValue
-	>;
-	readonly hook: () => FinalValue;
+	readonly context: InternalContext;
+	readonly useValue: () => Value;
 
-	constructor({
-		displayName,
-		context,
-		defaultValue,
-		options,
-	}: {
-		displayName?: string;
+	static create<
+		RawValue extends any,
+		Value = RawValue,
+		ContextSubscriberValue extends readonly any[] = DefSubscriberVal<
+			RawValue,
+			Value
+		>
+	>(
+		defaultValue?: RawValue,
 		options?: {
-			transformationHook?: (data: Value) => FinalValue;
+			transformationHook?: (data: RawValue) => Value;
 			contextSubscriberValueHook?: (
-				finalValue: FinalValue,
-				value: Value
+				value: Value,
+				rawValue: RawValue
 			) => ContextSubscriberValue;
 			contextSubscriberEqualityFn?: (
 				prevValue: ContextSubscriberValue,
 				nextValue: ContextSubscriberValue
 			) => boolean;
-		};
-	} & (
-		| {
-				context: React.Context<Value>;
-				defaultValue?: undefined;
-		  }
-		| { defaultValue: Value | null; context?: undefined }
-	)) {
-		if (!context) {
-			context = React.createContext(
-				((defaultValue ?? EMPTY_VAL) as any) as Value
-			);
 		}
-		if (typeof displayName !== "undefined") {
-			context.displayName = displayName;
-		}
-		this.dynamicContext = new DynamicContext(context, "value", options);
-		this.hook = this.dynamicContext.hook;
+	): StackedContext<
+		RawValue,
+		Value,
+		DynamicContext<RawValue, "value", Value>
+	> {
+		const dynamicContext = DynamicContext.create(
+			defaultValue,
+			"value",
+			options
+		);
+		return new StackedContext(dynamicContext) as any;
 	}
 
-	getMainContext() {
-		return this.dynamicContext.mainContext;
+	static createFromRawContext<
+		RawValue extends any,
+		Value = RawValue,
+		ContextSubscriberValue extends readonly any[] = DefSubscriberVal<
+			RawValue,
+			Value
+		>
+	>(
+		rawContext: React.Context<RawValue>,
+		options?: {
+			transformationHook?: (data: RawValue) => Value;
+			contextSubscriberValueHook?: (
+				value: Value,
+				rawValue: RawValue
+			) => ContextSubscriberValue;
+			contextSubscriberEqualityFn?: (
+				prevValue: ContextSubscriberValue,
+				nextValue: ContextSubscriberValue
+			) => boolean;
+		}
+	): StackedContext<
+		RawValue,
+		Value,
+		DynamicContext<RawValue, "value", Value>
+	> {
+		const dynamicContext = new DynamicContext(
+			rawContext,
+			"value" as const,
+			options
+		);
+		return new StackedContext(dynamicContext) as any;
+	}
+
+	constructor(internalContext: InternalContext) {
+		this.context = internalContext;
+		this.useValue = this.context.useValue;
 	}
 
 	addProvider<
-		OutHook extends (inArg: any, prevProviderValue: Value) => Value
+		OutHook extends (inArg: any, prevProviderValue: RawValue) => RawValue
 	>(outValueHook: OutHook): any {
 		type In = Parameters<OutHook>[0];
 		const component: React.FC<{ value: In }> = ({
 			children,
 			value: rawValue,
 		}) => {
-			const prevProviderValue = useContext(
-				this.dynamicContext.mainContext
-			);
+			const prevProviderValue = this.context.useRawValue();
 			const value = outValueHook(rawValue, prevProviderValue);
 			return React.createElement(
-				this.dynamicContext.Provider,
+				this.context.Provider,
 				{ value },
 				...toArray(children)
 			);
@@ -84,4 +107,10 @@ export class StackedContext<
 const toArray = <T extends any>(el: T): T extends any[] ? T : [T] => {
 	if (Array.isArray(el)) return el as any;
 	return [el] as any;
+};
+
+type StackInternalContext<Value, RawValue> = {
+	useValue(): Value;
+	useRawValue(): RawValue;
+	Provider: React.FC<{ value: RawValue }>;
 };
