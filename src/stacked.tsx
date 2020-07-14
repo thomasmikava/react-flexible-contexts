@@ -84,10 +84,9 @@ export class StackedContext<
 		this.useValue = this.context.useValue;
 	}
 
-	addProvider<
-		OutHook extends (inArg: any, prevProviderValue: RawValue) => RawValue
-	>(outValueHook: OutHook): any {
-		type In = Parameters<OutHook>[0];
+	addProvider<In extends any>(
+		outValueHook: (inArg: In, prevProviderValue: RawValue) => RawValue
+	): React.FC<{ value: In }> {
 		const component: React.FC<{ value: In }> = ({
 			children,
 			value: rawValue,

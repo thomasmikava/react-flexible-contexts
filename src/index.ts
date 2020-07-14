@@ -4,7 +4,7 @@ import {
 	ContextSubscriberMiniHook,
 	ContextSubscriberHook,
 } from "./subscriber/interfaces";
-import { nestData, useNestedData } from "./utils";
+import { nestData, useNestedData, createDeepMergeFn } from "./utils";
 
 export {
 	DynamicContext,
@@ -13,4 +13,5 @@ export {
 	ContextSubscriberHook,
 	nestData,
 	useNestedData,
+	createDeepMergeFn,
 };

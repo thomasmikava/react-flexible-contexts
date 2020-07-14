@@ -1,4 +1,8 @@
 import { useRef, useReducer } from "react";
+import {
+	depsShallowEquality,
+	propsEqualityFactory,
+} from "./equality-functions";
 
 type DependencyList = readonly any[];
 type EqualityFn = (
@@ -7,7 +11,7 @@ type EqualityFn = (
 ) => boolean;
 
 export const createMemoHook = (
-	areDepsEqual: EqualityFn = depsAreShallowlyEqual
+	areDepsEqual: EqualityFn = depsShallowEquality
 ) => {
 	const initialResultInfo = {
 		called: false,
@@ -42,13 +46,7 @@ export const createMemoHook = (
 	};
 };
 
-export const depsAreShallowlyEqual = (oldDeps: any[], newDeps: any[]) => {
-	if (oldDeps.length !== newDeps.length) return false;
-	for (let i = 0; i < oldDeps.length; ++i) {
-		if (oldDeps[i] !== newDeps[i]) return false;
-	}
-	return true;
-};
+export const usePropsMemo = createMemoHook(propsEqualityFactory(1));
 
 export const useForceUpdate = () => {
 	const [, forceUpdate] = useReducer(x => x + 1, 0);

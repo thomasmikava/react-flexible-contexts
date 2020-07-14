@@ -1,6 +1,7 @@
 import React, { useContext, useRef, useState, useEffect } from "react";
 import { ContextSubscriber } from "./subscriber";
 import { ContextSubscriberHook } from "./subscriber/interfaces";
+import { usePropsMemo } from "./hooks";
 
 const EMPTY_VAL = `__$$emptyValue:?#@#y7q!}fmhW)eL}L{b#b^(3$ZAMg.eyp6NL#h<N-S$)L<.=-j3WsMp&%2JDf6_vVdN7K."pg"_aswq"9CRS?!9YzG[}AD~Xb[E__$$`;
 
@@ -104,11 +105,11 @@ export class DynamicContext<
 				);
 		}, []);
 		const RawProvider = this.RawProvider;
-		const realRawValue = this.reconstructValue(props);
-		const realValue = this.transformationHook(realRawValue);
+		const rawValue = this.useReconstructValue(props);
+		const finalValue = this.transformationHook(rawValue);
 		const contextSubscriberValue = this.contextSubscriberValueHook(
-			realValue,
-			realRawValue
+			finalValue,
+			rawValue
 		);
 		this.subscriberContext.updateLastProviderValue(
 			internalContextData.id,
@@ -117,7 +118,7 @@ export class DynamicContext<
 		let lastChildren = children;
 		for (const el of this.InternalHooks.arr) {
 			const Provider = el.dynamicContext.Provider;
-			const val = el.fn(realValue);
+			const val = el.hook(finalValue);
 			lastChildren = <Provider value={val}>{lastChildren}</Provider>;
 		}
 		const Int = this.subscriberContext.context.Provider;
@@ -128,27 +129,27 @@ export class DynamicContext<
 		);
 	};
 
-	private reconstructValue(props: any): RawValue {
+	private useReconstructValue(props: any): RawValue {
 		if (typeof this.key === "string") {
 			return props[this.key];
 		}
-		return props;
+		return usePropsMemo(() => props, [props]);
 	}
 
-	addInternalContext<Fn extends (value: Value) => any>(
-		fn: Fn,
+	addInternalContext<Hook extends (value: Value) => any>(
+		hook: Hook,
 		displayName?: string
-	): DynamicContext<ReturnType<Fn>, "value"> & { destroy: Destroy } {
-		type R = ReturnType<Fn>;
+	): DynamicContext<ReturnType<Hook>, "value"> & { destroy: Destroy } {
+		type R = ReturnType<Hook>;
 		this.InternalHooks.version++;
 		const context = React.createContext((EMPTY_VAL as any) as R);
 		context.displayName = displayName;
 		const dynamicContext = new DynamicContext(
 			context,
 			"value"
-		) as DynamicContext<ReturnType<Fn>, "value"> & { destroy: Destroy };
+		) as DynamicContext<ReturnType<Hook>, "value"> & { destroy: Destroy };
 		const el: HookInfo<Value, R> = {
-			fn,
+			hook,
 			dynamicContext,
 		};
 		this.InternalHooks.arr.unshift(el);
@@ -193,7 +194,7 @@ export class DynamicContext<
 			const rawValue = useContext(context);
 			if ((rawValue as any) === EMPTY_VAL) {
 				throw new Error(
-					"Dynamic Context without deafult value must have a provider"
+					"Dynamic Context without deafult value or with internal contexts must be used with provider"
 				);
 			}
 			if (transformationHook) return transformationHook(rawValue);
@@ -327,7 +328,7 @@ interface MinimalComponent<P = {}> {
 }
 
 interface HookInfo<Value extends any, R extends any> {
-	fn: (value: Value) => R;
+	hook: (value: Value) => R;
 	dynamicContext: DynamicContext<R, "value", R>;
 }
 
@@ -340,7 +341,9 @@ const defaultContextSubscriberValueHook = <
 	value: Value,
 	rawValue: RawValue
 ) => {
-	return [value, () => rawValue] as const;
+	const rawValueRef = useRef(rawValue);
+	rawValueRef.current = rawValue;
+	return [value, () => rawValueRef.current] as const;
 };
 
 const defaultContextSubscriberEqualityFn = <T extends readonly any[]>(

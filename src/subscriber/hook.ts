@@ -1,10 +1,7 @@
 import { ContextSubscriberHook, ContextSubscraberValue } from "./interfaces";
 import React, { useContext, useState, useRef, useLayoutEffect } from "react";
-import {
-	createMemoHook,
-	depsAreShallowlyEqual,
-	useForceUpdate,
-} from "../hooks";
+import { createMemoHook, useForceUpdate } from "../hooks";
+import { depsShallowEquality } from "../equality-functions";
 type DependencyList = ReadonlyArray<any>;
 
 const EMPTY_DEPS = [
@@ -26,29 +23,7 @@ export const createContextSubscriberHook = <Data extends readonly any[]>(
 		deps?: DependencyList | null
 	);
 	function useContextValue<T>(...args: any[]) {
-		let areDataEqual: (
-			prevValue: T,
-			newValue: T
-		) => boolean = shallowCompare;
-		let deps: DependencyList | null = [];
-		const fn: (...rootData: Data) => any = args[0]
-			? args[0]
-			: defaultTransformer;
-
-		if (args.length > 2) {
-			if (args[1]) areDataEqual = args[1];
-			deps = args[2];
-		} else if (args[1] !== undefined) {
-			if (Array.isArray(args[1]) || args[1] === null) {
-				deps = args[1];
-			} else {
-				areDataEqual = args[1];
-			}
-		}
-		if (deps === undefined) deps = [];
-		if (!args[0]) {
-			areDataEqual = shallowCompareArr as any;
-		}
+		const [fn, areDataEqual, deps] = getArgs<T, Data>(args);
 
 		const fnRef = useRef(fn);
 		fnRef.current = fn;
@@ -70,7 +45,7 @@ export const createContextSubscriberHook = <Data extends readonly any[]>(
 					return;
 				}
 				transformedValueRef.current = value;
-				setTimeout(forceUpdate, 1);
+				setTimeout(() => forceUpdate(), 0);
 			});
 		}, [subscribe]);
 
@@ -78,8 +53,7 @@ export const createContextSubscriberHook = <Data extends readonly any[]>(
 			const value = fnRef.current(...getLatestValue());
 			if (areDataEqual(transformedValueRef.current, value)) return;
 			transformedValueRef.current = value;
-			setTimeout(forceUpdate, 1);
-		}, deps || EMPTY_DEPS);
+		}, deps);
 
 		return transformedValueRef.current;
 	}
@@ -91,7 +65,7 @@ export const createContextSubscriberHook = <Data extends readonly any[]>(
 			if (!trans) {
 				return hook(
 					(...rootData) => fn(...((rootData as unknown) as Data)),
-					shallowCompareArr,
+					depsShallowEquality,
 					[]
 				);
 			}
@@ -114,18 +88,29 @@ const shallowCompare = <T>(prev: T, next: T) => {
 	return prev === next;
 };
 
-const shallowCompareArr = <T extends any>(prev: T, next: T) => {
-	if (!Array.isArray(prev) || !Array.isArray(next)) {
-		return prev === next;
-	}
-	if (prev.length !== next.length) return false;
-	for (let i = 0; i < prev.length; ++i) {
-		if (prev[i] !== next[i]) return false;
-	}
-	return true;
-};
-
 const useCustomMemoHook = createMemoHook((oldDeps: any[], newDeps: any[]) => {
 	if (oldDeps === EMPTY_DEPS || newDeps === EMPTY_DEPS) return false;
-	return depsAreShallowlyEqual(oldDeps, newDeps);
+	return depsShallowEquality(oldDeps, newDeps);
 });
+
+const getArgs = <T, Data extends readonly any[]>(args: any[]) => {
+	let areDataEqual: (prevValue: T, newValue: T) => boolean = shallowCompare;
+	let deps: DependencyList | null = [];
+	const fn: (...rootData: Data) => T = args[0] ? args[0] : defaultTransformer;
+
+	if (args.length > 2) {
+		if (args[1]) areDataEqual = args[1];
+		deps = args[2];
+	} else if (args[1] !== undefined) {
+		if (Array.isArray(args[1]) || args[1] === null) {
+			deps = args[1];
+		} else {
+			areDataEqual = args[1];
+		}
+	}
+	if (deps === undefined) deps = [];
+	if (!args[0]) {
+		areDataEqual = depsShallowEquality as any;
+	}
+	return [fn, areDataEqual, deps || EMPTY_DEPS] as const;
+};
