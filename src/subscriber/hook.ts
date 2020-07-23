@@ -12,8 +12,9 @@ const defaultTransformer = <T extends readonly any[]>(...x: T) => x;
 export const createContextSubscriberHook = <Data extends readonly any[]>(
 	context: React.Context<ContextSubscraberValue<Data>>,
 	defaultProviderId: number,
-	useGettingDefaultValue: () => void,
+	useGettingDefaultValue: () => void
 ): ContextSubscriberHook<Data> => {
+	let defaultEqualityFn = globallyDefaultCompare;
 	function useContextValue();
 	function useContextValue<T>(
 		fn: (...rootData: Data) => T,
@@ -25,7 +26,10 @@ export const createContextSubscriberHook = <Data extends readonly any[]>(
 		deps?: DependencyList | null
 	);
 	function useContextValue<T>(...args: any[]) {
-		const [fn, areDataEqual, deps] = getArgs<T, Data>(args);
+		const [fn, areDataEqual, deps] = getArgs<T, Data>(
+			args,
+			defaultEqualityFn
+		);
 
 		const fnRef = useRef(fn);
 		fnRef.current = fn;
@@ -65,12 +69,17 @@ export const createContextSubscriberHook = <Data extends readonly any[]>(
 	(useContextValue as ContextSubscriberHook<Data>).extendHook = function<
 		T extends readonly any[]
 	>(fn: (...rootData: Data) => T): any {
-		const hook = createContextSubscriberHook(context, defaultProviderId, useGettingDefaultValue) as any;
+		const hook = createContextSubscriberHook(
+			context,
+			defaultProviderId,
+			useGettingDefaultValue
+		) as any;
 		const finalHook = (trans, ...args) => {
 			if (!trans) {
+				const { fn: eqFn, isDefaultFn } = hook.getEqualityFnInfo();
 				return hook(
 					(...rootData) => fn(...((rootData as unknown) as Data)),
-					depsShallowEquality,
+					isDefaultFn ? depsShallowEquality : eqFn,
 					[]
 				);
 			}
@@ -80,26 +89,76 @@ export const createContextSubscriberHook = <Data extends readonly any[]>(
 				...args
 			);
 		};
+		finalHook.setEqualityFn = hook.setEqualityFn;
 		finalHook.extendHook = someFn =>
 			hook.extendHook((...data) =>
 				someFn(...fn(...((data as unknown) as Data)))
 			);
+		/* const defEq = (...args) => defaultEqualityFn(...args as [any, any]);
+		defEq.___isSubscriberDefaultFn = () => {
+			return isDefaultEquality(defaultEqualityFn)
+		} */
+		const copiedEquality = dublicateEqualityFn(useContextValue as any);
+		finalHook.setEqualityFn(copiedEquality);
+		finalHook.getEqualityFnInfo = () => {
+			return {
+				fn: copiedEquality,
+				isDefaultFn: isDefaultEquality(copiedEquality),
+			};
+		};
 		return finalHook;
 	};
+	useContextValue.setEqualityFn = equalityFn => {
+		defaultEqualityFn = equalityFn;
+	};
+	(useContextValue as any).getEqualityFnInfo = () => {
+		return {
+			fn: defaultEqualityFn,
+			isDefaultFn: isDefaultEquality(defaultEqualityFn),
+		};
+	};
 	return useContextValue as any;
+};
+
+export const dublicateEqualityFn = (
+	useSubscriber: ContextSubscriberHook<any>
+) => {
+	const contextSubscriberHookEqualityFn = (prev, next) => {
+		return useSubscriber.getEqualityFnInfo().fn(prev, next);
+	};
+	contextSubscriberHookEqualityFn.___isSubscriberDefaultFn = () => {
+		return useSubscriber.getEqualityFnInfo().isDefaultFn;
+	};
+	return contextSubscriberHookEqualityFn;
 };
 
 const shallowCompare = <T>(prev: T, next: T) => {
 	return prev === next;
 };
+shallowCompare.___isSubscriberDefaultFn = () => true;
+
+const isDefaultEquality = (fn: any): boolean => {
+	if (typeof fn !== "function") return false;
+	if (typeof fn.___isSubscriberDefaultFn !== "function") return false;
+	return fn.___isSubscriberDefaultFn();
+};
+
+const globallyDefaultCompare = shallowCompare;
 
 const useCustomMemoHook = createMemoHook((oldDeps: any[], newDeps: any[]) => {
 	if (oldDeps === EMPTY_DEPS || newDeps === EMPTY_DEPS) return false;
 	return depsShallowEquality(oldDeps, newDeps);
 });
 
-const getArgs = <T, Data extends readonly any[]>(args: any[]) => {
-	let areDataEqual: (prevValue: T, newValue: T) => boolean = shallowCompare;
+const getArgs = <T, Data extends readonly any[]>(
+	args: any[],
+	defaultEqualityFn?: (prevValue: any, newValue: any) => boolean
+) => {
+	if (isDefaultEquality(defaultEqualityFn)) {
+		defaultEqualityFn = undefined;
+	}
+	let areDataEqual: (prevValue: T, newValue: T) => boolean =
+		defaultEqualityFn || shallowCompare;
 	let deps: DependencyList | null = [];
 	const fn: (...rootData: Data) => T = args[0] ? args[0] : defaultTransformer;
 
@@ -115,7 +174,7 @@ const getArgs = <T, Data extends readonly any[]>(args: any[]) => {
 	}
 	if (deps === undefined) deps = [];
 	if (!args[0]) {
-		areDataEqual = depsShallowEquality as any;
+		areDataEqual = defaultEqualityFn || (depsShallowEquality as any);
 	}
 	return [fn, areDataEqual, deps || EMPTY_DEPS] as const;
 };

@@ -4,6 +4,8 @@ import { ContextSubscriberHook } from "./subscriber/interfaces";
 import { usePropsMemo } from "./hooks";
 import { Subscription } from "./subscriber/subscription";
 import { useReRenderSubscription } from "./subscriber/re-render";
+import { areDeeplyEqual } from "./equality-functions";
+import { dublicateEqualityFn } from "./subscriber/hook";
 
 const EMPTY_VAL = `__$$emptyValue:?#@#y7q!}fmhW)eL}L{b#b^(3$ZAMg.eyp6NL#h<N-S$)L<.=-j3WsMp&%2JDf6_vVdN7K."pg"_aswq"9CRS?!9YzG[}AD~Xb[E__$$`;
 
@@ -35,17 +37,7 @@ export class DynamicContext<
 	private constructor(
 		private defaultValueGetter: () => RawValue,
 		private readonly key?: Key,
-		options?: {
-			transformationHook?: (data: RawValue) => Value;
-			contextSubscriberValueHook?: (
-				value: Value,
-				rawValue: RawValue
-			) => ContextSubscriberValue;
-			contextSubscriberEqualityFn?: (
-				prevValue: ContextSubscriberValue,
-				nextValue: ContextSubscriberValue
-			) => boolean;
-		}
+		options?: DynamicContextOptions<RawValue, Value, ContextSubscriberValue>
 	) {
 		if (key === "undefined") {
 			key = "value" as Key;
@@ -62,6 +54,8 @@ export class DynamicContext<
 		let contextSubscriberEqualityFn = options
 			? options.contextSubscriberEqualityFn
 			: undefined;
+		const contextSubscriberHookEqualityFn =
+			options && options.contextSubscriberHookEqualityFn;
 		const contextSubscriberValueHook = options
 			? options.contextSubscriberValueHook
 			: undefined;
@@ -76,16 +70,16 @@ export class DynamicContext<
 			contextSubscriberEqualityFn
 		);
 		this.useSubscriber = this.subscriberContext.useSubscriber;
+		if (contextSubscriberHookEqualityFn) {
+			this.useSubscriber.setEqualityFn(contextSubscriberHookEqualityFn);
+		}
 	}
 
 	private getSubscriberContextDefaultValue = () => {
 		const rawValue = this.useRawValue();
 		const finalValue = this.transformationHook(rawValue);
-		return this.contextSubscriberValueHook(
-			finalValue,
-			rawValue
-		)
-	}
+		return this.contextSubscriberValueHook(finalValue, rawValue);
+	};
 
 	private defValueReRenders = new Subscription<[]>();
 
@@ -95,13 +89,17 @@ export class DynamicContext<
 
 	setDefaultValue(rawValue: RawValue) {
 		this.defaultValueGetter = () => rawValue;
-		this.subscriberContext.setDefaultValueGetter(() => this.getSubscriberContextDefaultValue());
+		this.subscriberContext.setDefaultValueGetter(() =>
+			this.getSubscriberContextDefaultValue()
+		);
 		this.defValueReRenders.broadcast();
 	}
 
 	setDefaultValueGetter(fn: () => RawValue) {
 		this.defaultValueGetter = fn;
-		this.subscriberContext.setDefaultValueGetter(() => this.getSubscriberContextDefaultValue());
+		this.subscriberContext.setDefaultValueGetter(() =>
+			this.getSubscriberContextDefaultValue()
+		);
 		this.defValueReRenders.broadcast();
 	}
 
@@ -112,7 +110,9 @@ export class DynamicContext<
 			contextValue = this.defaultValueGetter();
 		}
 		if (contextValue === EMPTY_VAL) {
-			throw new Error("Dynamic Context without deafult value must be used with provider");
+			throw new Error(
+				"Dynamic Context without deafult value must be used with provider"
+			);
 		}
 		return contextValue;
 	};
@@ -174,11 +174,15 @@ export class DynamicContext<
 	): DynamicContext<ReturnType<Hook>, "value"> & { destroy: Destroy } {
 		type R = ReturnType<Hook>;
 		this.InternalHooks.version++;
-		const valueGetter = () => hook(this.useValue()) as any as R;
-		const dynamicContext = new DynamicContext(
-			valueGetter,
-			"value"
-		) as DynamicContext<ReturnType<Hook>, "value"> & { destroy: Destroy };
+		const valueGetter = () => (hook(this.useValue()) as any) as R;
+
+		const contextSubscriberHookEqualityFn = dublicateEqualityFn(
+			this.useSubscriber
+		);
+
+		const dynamicContext = new DynamicContext(valueGetter, "value", {
+			contextSubscriberHookEqualityFn,
+		}) as DynamicContext<ReturnType<Hook>, "value"> & { destroy: Destroy };
 		dynamicContext.setContextName(displayName);
 		const el: HookInfo<Value, R> = {
 			hook,
@@ -221,7 +225,26 @@ export class DynamicContext<
 	useValue = (): Value => {
 		const rawValue = this.useRawValue();
 		return this.transformationHook(rawValue);
-	}
+	};
+
+	useProperty = <
+		K extends Value extends Record<any, any> ? keyof Value : never
+	>(
+		key: K
+	): Value extends Record<any, any> ? Value[K] : never => {
+		return this.useSubscriber((val => val[key]) as any, []);
+	};
+	useProperties = <
+		K extends Value extends Record<any, any> ? keyof Value : never
+	>(
+		...keys: K[]
+	): Value extends Record<any, any> ? Pick<Value, K> : never => {
+		return this.useSubscriber(
+			(val => pickKeys(val, keys)) as any,
+			topPropsEquality,
+			[]
+		);
+	};
 
 	static create<
 		RawValue extends any,
@@ -231,17 +254,7 @@ export class DynamicContext<
 	>(
 		defaultValue: RawValue | undefined,
 		key: K,
-		options?: {
-			transformationHook?: (data: RawValue) => Value;
-			contextSubscriberValueHook?: (
-				value: Value,
-				rawValue: RawValue
-			) => ContextSubscriberValue;
-			contextSubscriberEqualityFn?: (
-				prevValue: ContextSubscriberValue,
-				nextValue: ContextSubscriberValue
-			) => boolean;
-		}
+		options?: DynamicContextOptions<RawValue, Value, ContextSubscriberValue>
 	): DynamicContext<RawValue, K, Value>;
 	static create<
 		RawValue extends any,
@@ -250,25 +263,22 @@ export class DynamicContext<
 	>(
 		defaultValue?: RawValue,
 		key?: undefined | "value",
-		options?: {
-			transformationHook?: (data: RawValue) => Value;
-			contextSubscriberValueHook?: (
-				value: Value,
-				rawValue: RawValue
-			) => ContextSubscriberValue;
-			contextSubscriberEqualityFn?: (
-				prevValue: ContextSubscriberValue,
-				nextValue: ContextSubscriberValue
-			) => boolean;
-		}
+		options?: DynamicContextOptions<RawValue, Value, ContextSubscriberValue>
 	): DynamicContext<RawValue, "value", Value>;
 	static create<RawValue extends any, Value = RawValue>(
 		defaultValue?: RawValue,
 		key = "value",
 		options?: any
 	): any {
-		const valueGetter = () => (defaultValue === undefined ? EMPTY_VAL : defaultValue) as any as RawValue;
-		return new DynamicContext<RawValue, any, Value>(valueGetter, key, options);
+		const valueGetter = () =>
+			((defaultValue === undefined
+				? EMPTY_VAL
+				: defaultValue) as any) as RawValue;
+		return new DynamicContext<RawValue, any, Value>(
+			valueGetter,
+			key,
+			options
+		);
 	}
 
 	static createDestructured<
@@ -277,19 +287,12 @@ export class DynamicContext<
 		ContextSubscriberValue extends readonly any[] = [Value, () => RawValue]
 	>(
 		defaultValue?: RawValue,
-		options?: {
-			transformationHook?: (data: RawValue) => Value;
-			contextSubscriberValueHook?: (
-				value: Value,
-				rawValue: RawValue
-			) => ContextSubscriberValue;
-			contextSubscriberEqualityFn?: (
-				prevValue: ContextSubscriberValue,
-				nextValue: ContextSubscriberValue
-			) => boolean;
-		}
+		options?: DynamicContextOptions<RawValue, Value, ContextSubscriberValue>
 	): DynamicContext<RawValue, null, Value, ContextSubscriberValue> {
-		const valueGetter = () => (defaultValue === undefined ? EMPTY_VAL : defaultValue) as any as RawValue;
+		const valueGetter = () =>
+			((defaultValue === undefined
+				? EMPTY_VAL
+				: defaultValue) as any) as RawValue;
 
 		return new DynamicContext<
 			RawValue,
@@ -366,4 +369,36 @@ const defaultContextSubscriberEqualityFn = <T extends readonly any[]>(
 	return prevVal[0] === newVal[0];
 };
 
+function pickKeys<T extends {}, K extends keyof T>(
+	obj: T,
+	keys: K[]
+): Pick<T, K> {
+	const obj2 = {} as Pick<T, K>;
+	for (let i = 0; i < keys.length; ++i) {
+		if (obj.hasOwnProperty(keys[i]) || obj[keys[i]] !== undefined) {
+			obj2[keys[i]] = obj[keys[i]];
+		}
+	}
+	return obj2;
+}
+const topPropsEquality = <T extends Record<any, any>>(obj1: T, obj2: T) =>
+	areDeeplyEqual(obj1, obj2, 1);
+
 export type DefSubscriberVal<Value, RawValue = Value> = [Value, () => RawValue];
+
+export type DynamicContextOptions<
+	RawValue,
+	Value,
+	ContextSubscriberValue extends readonly any[]
+> = {
+	transformationHook?: (data: RawValue) => Value;
+	contextSubscriberValueHook?: (
+		value: Value,
+		rawValue: RawValue
+	) => ContextSubscriberValue;
+	contextSubscriberEqualityFn?: (
+		prevValue: ContextSubscriberValue,
+		nextValue: ContextSubscriberValue
+	) => boolean;
+	contextSubscriberHookEqualityFn?: (prev: any, current: any) => boolean;
+};

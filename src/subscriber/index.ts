@@ -2,7 +2,6 @@ import React, { useContext } from "react";
 import { Subscription } from "./subscription";
 import { ContextSubscraberValue, ContextSubscriberHook } from "./interfaces";
 import { createContextSubscriberHook } from "./hook";
-import { useReRenderSubscription } from "./re-render";
 
 const EMPTY_VAL = `__$$emptyValue:-r$H5*AUg&TPWUkH_fPbLLNJQfHF4WQ%&rey)qCJP+]83~J^v__$$`;
 
@@ -14,10 +13,12 @@ export class ContextSubscriber<Data extends readonly any[]> {
 	private readonly useGettingDefaultValue = () => {
 		const value = this.defaultValueGetter();
 		if ((value as any) === EMPTY_VAL) {
-			throw new Error("Cannot use ContextSubscriber without default value or provider");
+			throw new Error(
+				"Cannot use ContextSubscriber without default value or provider"
+			);
 		}
 		this.updateLastProviderValue(this.defaultProvider.id, ...value);
-	}
+	};
 
 	constructor(
 		private defaultValueGetter: () => Data = (() => EMPTY_VAL) as any,
@@ -26,9 +27,13 @@ export class ContextSubscriber<Data extends readonly any[]> {
 			next: Data
 		) => boolean = defaultShallowEquality
 	) {
-		this.defaultProvider =  this.registerNewProvider();
+		this.defaultProvider = this.registerNewProvider();
 		this.context = React.createContext(this.defaultProvider);
-		this.useSubscriber = createContextSubscriberHook(this.context, this.defaultProvider.id, this.useGettingDefaultValue);
+		this.useSubscriber = createContextSubscriberHook(
+			this.context,
+			this.defaultProvider.id,
+			this.useGettingDefaultValue
+		);
 	}
 
 	setDefaultValueGetter(fn: () => Data) {

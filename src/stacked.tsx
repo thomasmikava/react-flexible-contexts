@@ -1,5 +1,9 @@
 import React from "react";
-import { DynamicContext, DefSubscriberVal } from "./dynamic";
+import {
+	DynamicContext,
+	DefSubscriberVal,
+	DynamicContextOptions,
+} from "./dynamic";
 
 export class StackedContext<
 	RawValue extends any,
@@ -21,17 +25,7 @@ export class StackedContext<
 		>
 	>(
 		defaultValue?: RawValue,
-		options?: {
-			transformationHook?: (data: RawValue) => Value;
-			contextSubscriberValueHook?: (
-				value: Value,
-				rawValue: RawValue
-			) => ContextSubscriberValue;
-			contextSubscriberEqualityFn?: (
-				prevValue: ContextSubscriberValue,
-				nextValue: ContextSubscriberValue
-			) => boolean;
-		}
+		options?: DynamicContextOptions<RawValue, Value, ContextSubscriberValue>
 	): StackedContext<
 		RawValue,
 		Value,

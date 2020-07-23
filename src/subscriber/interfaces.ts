@@ -14,6 +14,11 @@ export interface ContextSubscriberHook<Data extends readonly any[]>
 	extendHook<T extends readonly any[]>(
 		fn: (...rootData: Data) => T
 	): ContextSubscriberHook<T>;
+	setEqualityFn(equalityFn: (prevValue: any, newValue: any) => boolean): void;
+	getEqualityFnInfo: () => {
+		isDefaultFn: boolean;
+		fn: (prevValue: any, newValue: any) => boolean;
+	};
 }
 
 export interface ContextSubscraberValue<Data extends readonly any[]> {
