@@ -10,7 +10,9 @@ const EMPTY_DEPS = [
 
 const defaultTransformer = <T extends readonly any[]>(...x: T) => x;
 export const createContextSubscriberHook = <Data extends readonly any[]>(
-	context: React.Context<ContextSubscraberValue<Data>>
+	context: React.Context<ContextSubscraberValue<Data>>,
+	defaultProviderId: number,
+	useGettingDefaultValue: () => void,
 ): ContextSubscriberHook<Data> => {
 	function useContextValue();
 	function useContextValue<T>(
@@ -32,7 +34,10 @@ export const createContextSubscriberHook = <Data extends readonly any[]>(
 
 		const forceUpdate = useForceUpdate();
 
-		const { getLatestValue, subscribe } = useContext(context);
+		const { getLatestValue, subscribe, id } = useContext(context);
+		if (id === defaultProviderId) {
+			useGettingDefaultValue();
+		}
 		const [transformedInitialValue] = useState(() => {
 			return fn(...getLatestValue());
 		});
@@ -60,7 +65,7 @@ export const createContextSubscriberHook = <Data extends readonly any[]>(
 	(useContextValue as ContextSubscriberHook<Data>).extendHook = function<
 		T extends readonly any[]
 	>(fn: (...rootData: Data) => T): any {
-		const hook = createContextSubscriberHook(context) as any;
+		const hook = createContextSubscriberHook(context, defaultProviderId, useGettingDefaultValue) as any;
 		const finalHook = (trans, ...args) => {
 			if (!trans) {
 				return hook(

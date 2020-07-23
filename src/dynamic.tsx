@@ -2,6 +2,8 @@ import React, { useContext, useRef, useState, useEffect } from "react";
 import { ContextSubscriber } from "./subscriber";
 import { ContextSubscriberHook } from "./subscriber/interfaces";
 import { usePropsMemo } from "./hooks";
+import { Subscription } from "./subscriber/subscription";
+import { useReRenderSubscription } from "./subscriber/re-render";
 
 const EMPTY_VAL = `__$$emptyValue:?#@#y7q!}fmhW)eL}L{b#b^(3$ZAMg.eyp6NL#h<N-S$)L<.=-j3WsMp&%2JDf6_vVdN7K."pg"_aswq"9CRS?!9YzG[}AD~Xb[E__$$`;
 
@@ -10,14 +12,14 @@ export class DynamicContext<
 	Key extends string | null,
 	Value = RawValue,
 	ContextSubscriberValue extends readonly any[] = DefSubscriberVal<
-		RawValue,
-		Value
+		Value,
+		RawValue
 	>
 > {
-	readonly useValue: () => Value;
 	private readonly RawProvider: MinimalComponent<any>;
 	private transformationHook: (data: RawValue) => Value;
 	private subscriberContext: ContextSubscriber<ContextSubscriberValue>;
+	private readonly mainContext: React.Context<RawValue>;
 
 	readonly useSubscriber: ContextSubscriberHook<ContextSubscriberValue>;
 	private readonly contextSubscriberValueHook: (
@@ -30,8 +32,8 @@ export class DynamicContext<
 		arr: [] as HookInfo<Value, any>[],
 	};
 
-	constructor(
-		public readonly mainContext: React.Context<RawValue>,
+	private constructor(
+		private defaultValueGetter: () => RawValue,
 		private readonly key?: Key,
 		options?: {
 			transformationHook?: (data: RawValue) => Value;
@@ -49,15 +51,13 @@ export class DynamicContext<
 			key = "value" as Key;
 			this.key = key;
 		}
+		this.mainContext = React.createContext<RawValue>(EMPTY_VAL as any);
+		this.defaultValueGetter = defaultValueGetter;
 		const transformationHook = options
 			? options.transformationHook
 			: undefined;
 		this.transformationHook =
 			transformationHook || ((x: RawValue) => (x as any) as Value);
-		this.useValue = DynamicContext.createHookFromContext<RawValue, Value>(
-			this.mainContext,
-			this.transformationHook
-		);
 		this.RawProvider = this.getRawProvider();
 		let contextSubscriberEqualityFn = options
 			? options.contextSubscriberEqualityFn
@@ -68,21 +68,53 @@ export class DynamicContext<
 		if (!contextSubscriberValueHook) {
 			contextSubscriberEqualityFn = defaultContextSubscriberEqualityFn;
 		}
-		this.subscriberContext = new ContextSubscriber<ContextSubscriberValue>(
-			contextSubscriberEqualityFn
-		);
-		this.useSubscriber = this.subscriberContext.useSubscriber;
 		this.contextSubscriberValueHook =
 			contextSubscriberValueHook ||
 			(defaultContextSubscriberValueHook as any);
+		this.subscriberContext = new ContextSubscriber<ContextSubscriberValue>(
+			this.getSubscriberContextDefaultValue,
+			contextSubscriberEqualityFn
+		);
+		this.useSubscriber = this.subscriberContext.useSubscriber;
 	}
+
+	private getSubscriberContextDefaultValue = () => {
+		const rawValue = this.useRawValue();
+		const finalValue = this.transformationHook(rawValue);
+		return this.contextSubscriberValueHook(
+			finalValue,
+			rawValue
+		)
+	}
+
+	private defValueReRenders = new Subscription<[]>();
 
 	setContextName(name: string | undefined) {
 		this.mainContext.displayName = name;
 	}
 
-	useRawValue = () => {
-		return useContext(this.mainContext);
+	setDefaultValue(rawValue: RawValue) {
+		this.defaultValueGetter = () => rawValue;
+		this.subscriberContext.setDefaultValueGetter(() => this.getSubscriberContextDefaultValue());
+		this.defValueReRenders.broadcast();
+	}
+
+	setDefaultValueGetter(fn: () => RawValue) {
+		this.defaultValueGetter = fn;
+		this.subscriberContext.setDefaultValueGetter(() => this.getSubscriberContextDefaultValue());
+		this.defValueReRenders.broadcast();
+	}
+
+	useRawValue = (): RawValue => {
+		let contextValue = useContext(this.mainContext);
+		if (contextValue === EMPTY_VAL) {
+			useReRenderSubscription(this.defValueReRenders);
+			contextValue = this.defaultValueGetter();
+		}
+		if (contextValue === EMPTY_VAL) {
+			throw new Error("Dynamic Context without deafult value must be used with provider");
+		}
+		return contextValue;
 	};
 
 	Provider: MinimalComponent<
@@ -142,12 +174,12 @@ export class DynamicContext<
 	): DynamicContext<ReturnType<Hook>, "value"> & { destroy: Destroy } {
 		type R = ReturnType<Hook>;
 		this.InternalHooks.version++;
-		const context = React.createContext((EMPTY_VAL as any) as R);
-		context.displayName = displayName;
+		const valueGetter = () => hook(this.useValue()) as any as R;
 		const dynamicContext = new DynamicContext(
-			context,
+			valueGetter,
 			"value"
 		) as DynamicContext<ReturnType<Hook>, "value"> & { destroy: Destroy };
+		dynamicContext.setContextName(displayName);
 		const el: HookInfo<Value, R> = {
 			hook,
 			dynamicContext,
@@ -186,20 +218,9 @@ export class DynamicContext<
 		return Provider;
 	}
 
-	static createHookFromContext<RawValue, Value = RawValue>(
-		context: React.Context<RawValue>,
-		transformationHook?: (rawData: RawValue) => Value
-	): () => Value {
-		return () => {
-			const rawValue = useContext(context);
-			if ((rawValue as any) === EMPTY_VAL) {
-				throw new Error(
-					"Dynamic Context without deafult value or with internal contexts must be used with provider"
-				);
-			}
-			if (transformationHook) return transformationHook(rawValue);
-			return (rawValue as any) as Value;
-		};
+	useValue = (): Value => {
+		const rawValue = this.useRawValue();
+		return this.transformationHook(rawValue);
 	}
 
 	static create<
@@ -246,12 +267,8 @@ export class DynamicContext<
 		key = "value",
 		options?: any
 	): any {
-		const RawContext = React.createContext(
-			((typeof defaultValue === "undefined"
-				? EMPTY_VAL
-				: defaultValue) as any) as RawValue
-		);
-		return new DynamicContext(RawContext, key, options);
+		const valueGetter = () => (defaultValue === undefined ? EMPTY_VAL : defaultValue) as any as RawValue;
+		return new DynamicContext<RawValue, any, Value>(valueGetter, key, options);
 	}
 
 	static createDestructured<
@@ -272,18 +289,14 @@ export class DynamicContext<
 			) => boolean;
 		}
 	): DynamicContext<RawValue, null, Value, ContextSubscriberValue> {
-		const RawContext = React.createContext(
-			((typeof defaultValue === "undefined"
-				? EMPTY_VAL
-				: defaultValue) as any) as RawValue
-		);
+		const valueGetter = () => (defaultValue === undefined ? EMPTY_VAL : defaultValue) as any as RawValue;
 
 		return new DynamicContext<
 			RawValue,
 			null,
 			Value,
 			ContextSubscriberValue
-		>(RawContext, null, options);
+		>(valueGetter, null, options);
 	}
 
 	private static createDestructuredProvider<Value extends {}>(
@@ -353,4 +366,4 @@ const defaultContextSubscriberEqualityFn = <T extends readonly any[]>(
 	return prevVal[0] === newVal[0];
 };
 
-export type DefSubscriberVal<RawValue, Value> = [Value, () => RawValue];
+export type DefSubscriberVal<Value, RawValue = Value> = [Value, () => RawValue];
