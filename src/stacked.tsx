@@ -1,7 +1,7 @@
 import React from "react";
 import {
 	DynamicContext,
-	DefSubscriberVal,
+	DefSelectorArgs,
 	DynamicContextOptions,
 } from "./dynamic";
 
@@ -19,13 +19,13 @@ export class StackedContext<
 	static create<
 		RawValue extends any,
 		Value = RawValue,
-		ContextSubscriberValue extends readonly any[] = DefSubscriberVal<
+		ContextSelectorArgs extends readonly any[] = DefSelectorArgs<
 			RawValue,
 			Value
 		>
 	>(
 		defaultValue?: RawValue,
-		options?: DynamicContextOptions<RawValue, Value, ContextSubscriberValue>
+		options?: DynamicContextOptions<RawValue, Value, ContextSelectorArgs>
 	): StackedContext<
 		RawValue,
 		Value,

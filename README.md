@@ -80,11 +80,11 @@ const DescendantComponent = () => {
 If you do not need whole context, you can optimize effortesly:
 ```tsx
 const DescendantComponent = () => {
-	const firstname = UserContext.useSubscriber(val => val.firstname, []); // the array is for dependency list
+	const firstname = UserContext.useSelector(val => val.firstname, []); // the array is for dependency list
 
 	const [minLength, setMinLength] = useState(5);
 	// if minLength changes, the passed function will be called anyway to ensure consistent data
-	const isLastnameLongEnough = UserContext.useSubscriber(
+	const isLastnameLongEnough = UserContext.useSelector(
 		val => val.lastname >= minLength,
 		[minLength]
 	);
@@ -93,10 +93,10 @@ const DescendantComponent = () => {
 };
 ```
 
-You can take optimization even further
+You can take optimization even further and pass equality function in order to avoid extra re-renders
 ```tsx
 const DescendantComponent = () => {
-	const { firstname, setFirstname } = UserContext.useSubscriber(
+	const { firstname, setFirstname } = UserContext.useSelector(
 		val => ({ firstname: val.firstname, setFirstname: val.setFirstname }),
 		(prev, next) =>
 			prev.firstname === next.firstname &&
@@ -105,6 +105,16 @@ const DescendantComponent = () => {
 	);
 
 	return <div>Hello {firstname}</div>;
+};
+```
+
+You can use specific property or properties
+```tsx
+const DescendantComponent = () => {
+	const { firstname, setFirstname } = UserContext.useProperties("firstname", "setFirstname");
+	const lastname = UserContext.useProperty("lastname");
+
+	return <div>Hello {firstname} {lastname}</div>;
 };
 ```
 

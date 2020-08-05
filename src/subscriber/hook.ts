@@ -1,4 +1,4 @@
-import { ContextSubscriberHook, ContextSubscraberValue } from "./interfaces";
+import { ContextSelectorHook, ContextSubscraberValue } from "./interfaces";
 import React, { useContext, useState, useRef, useLayoutEffect } from "react";
 import { createMemoHook, useForceUpdate } from "../hooks";
 import { depsShallowEquality } from "../equality-functions";
@@ -9,11 +9,11 @@ const EMPTY_DEPS = [
 ];
 
 const defaultTransformer = <T extends readonly any[]>(...x: T) => x;
-export const createContextSubscriberHook = <Data extends readonly any[]>(
+export const createContextSelectorHook = <Data extends readonly any[]>(
 	context: React.Context<ContextSubscraberValue<Data>>,
 	defaultProviderId: number,
 	useGettingDefaultValue: () => void
-): ContextSubscriberHook<Data> => {
+): ContextSelectorHook<Data> => {
 	let defaultEqualityFn = globallyDefaultCompare;
 	function useContextValue();
 	function useContextValue<T>(
@@ -66,10 +66,10 @@ export const createContextSubscriberHook = <Data extends readonly any[]>(
 
 		return transformedValueRef.current;
 	}
-	(useContextValue as ContextSubscriberHook<Data>).extendHook = function<
+	(useContextValue as ContextSelectorHook<Data>).extendHook = function<
 		T extends readonly any[]
 	>(fn: (...rootData: Data) => T): any {
-		const hook = createContextSubscriberHook(
+		const hook = createContextSelectorHook(
 			context,
 			defaultProviderId,
 			useGettingDefaultValue
@@ -120,16 +120,14 @@ export const createContextSubscriberHook = <Data extends readonly any[]>(
 	return useContextValue as any;
 };
 
-export const dublicateEqualityFn = (
-	useSubscriber: ContextSubscriberHook<any>
-) => {
-	const contextSubscriberHookEqualityFn = (prev, next) => {
-		return useSubscriber.getEqualityFnInfo().fn(prev, next);
+export const dublicateEqualityFn = (useSelector: ContextSelectorHook<any>) => {
+	const selectorValueEqualityFn = (prev, next) => {
+		return useSelector.getEqualityFnInfo().fn(prev, next);
 	};
-	contextSubscriberHookEqualityFn.___isSubscriberDefaultFn = () => {
-		return useSubscriber.getEqualityFnInfo().isDefaultFn;
+	selectorValueEqualityFn.___isSubscriberDefaultFn = () => {
+		return useSelector.getEqualityFnInfo().isDefaultFn;
 	};
-	return contextSubscriberHookEqualityFn;
+	return selectorValueEqualityFn;
 };
 
 const shallowCompare = <T>(prev: T, next: T) => {

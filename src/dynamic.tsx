@@ -1,6 +1,6 @@
 import React, { useContext, useRef, useState, useEffect } from "react";
 import { ContextSubscriber } from "./subscriber";
-import { ContextSubscriberHook } from "./subscriber/interfaces";
+import { ContextSelectorHook } from "./subscriber/interfaces";
 import { usePropsMemo } from "./hooks";
 import { Subscription } from "./subscriber/subscription";
 import { useReRenderSubscription } from "./subscriber/re-render";
@@ -13,21 +13,21 @@ export class DynamicContext<
 	RawValue extends any,
 	Key extends string | null,
 	Value = RawValue,
-	ContextSubscriberValue extends readonly any[] = DefSubscriberVal<
+	ContextSelectorArgs extends readonly any[] = DefSelectorArgs<
 		Value,
 		RawValue
 	>
 > {
 	private readonly RawProvider: MinimalComponent<any>;
-	private transformationHook: (data: RawValue) => Value;
-	private subscriberContext: ContextSubscriber<ContextSubscriberValue>;
+	private rawToFinalValueHook: (data: RawValue) => Value;
+	private subscriberContext: ContextSubscriber<ContextSelectorArgs>;
 	private readonly mainContext: React.Context<RawValue>;
 
-	readonly useSubscriber: ContextSubscriberHook<ContextSubscriberValue>;
-	private readonly contextSubscriberValueHook: (
+	readonly useSelector: ContextSelectorHook<ContextSelectorArgs>;
+	private readonly selectorArgsHook: (
 		value: Value,
 		rawValue: RawValue
-	) => ContextSubscriberValue;
+	) => ContextSelectorArgs;
 
 	private InternalHooks = {
 		version: 0,
@@ -37,7 +37,7 @@ export class DynamicContext<
 	private constructor(
 		private defaultValueGetter: () => RawValue,
 		private readonly key?: Key,
-		options?: DynamicContextOptions<RawValue, Value, ContextSubscriberValue>
+		options?: DynamicContextOptions<RawValue, Value, ContextSelectorArgs>
 	) {
 		if (key === "undefined") {
 			key = "value" as Key;
@@ -45,40 +45,40 @@ export class DynamicContext<
 		}
 		this.mainContext = React.createContext<RawValue>(EMPTY_VAL as any);
 		this.defaultValueGetter = defaultValueGetter;
-		const transformationHook = options
-			? options.transformationHook
+		const rawToFinalValueHook = options
+			? options.rawToFinalValueHook
 			: undefined;
-		this.transformationHook =
-			transformationHook || ((x: RawValue) => (x as any) as Value);
+		this.rawToFinalValueHook =
+			rawToFinalValueHook || ((x: RawValue) => (x as any) as Value);
 		this.RawProvider = this.getRawProvider();
-		let contextSubscriberEqualityFn = options
-			? options.contextSubscriberEqualityFn
+		let selectorArgsEqualityFn = options
+			? options.selectorArgsEqualityFn
 			: undefined;
-		const contextSubscriberHookEqualityFn =
-			options && options.contextSubscriberHookEqualityFn;
-		const contextSubscriberValueHook = options
-			? options.contextSubscriberValueHook
+		const selectorValueEqualityFn =
+			options && options.selectorValueEqualityFn;
+		const selectorArgsHook = options
+			? options.selectorArgsHook
 			: undefined;
-		if (!contextSubscriberValueHook) {
-			contextSubscriberEqualityFn = defaultContextSubscriberEqualityFn;
+		if (!selectorArgsHook) {
+			selectorArgsEqualityFn = defaultContextSelectorArgsEqualityFn;
 		}
-		this.contextSubscriberValueHook =
-			contextSubscriberValueHook ||
-			(defaultContextSubscriberValueHook as any);
-		this.subscriberContext = new ContextSubscriber<ContextSubscriberValue>(
+		this.selectorArgsHook =
+			selectorArgsHook ||
+			(defaultUseContextSelectorArgs as any);
+		this.subscriberContext = new ContextSubscriber<ContextSelectorArgs>(
 			this.getSubscriberContextDefaultValue,
-			contextSubscriberEqualityFn
+			selectorArgsEqualityFn
 		);
-		this.useSubscriber = this.subscriberContext.useSubscriber;
-		if (contextSubscriberHookEqualityFn) {
-			this.useSubscriber.setEqualityFn(contextSubscriberHookEqualityFn);
+		this.useSelector = this.subscriberContext.useSelector;
+		if (selectorValueEqualityFn) {
+			this.useSelector.setEqualityFn(selectorValueEqualityFn);
 		}
 	}
 
 	private getSubscriberContextDefaultValue = () => {
 		const rawValue = this.useRawValue();
-		const finalValue = this.transformationHook(rawValue);
-		return this.contextSubscriberValueHook(finalValue, rawValue);
+		const finalValue = this.rawToFinalValueHook(rawValue);
+		return this.selectorArgsHook(finalValue, rawValue);
 	};
 
 	private defValueReRenders = new Subscription<[]>();
@@ -138,14 +138,14 @@ export class DynamicContext<
 		}, []);
 		const RawProvider = this.RawProvider;
 		const rawValue = this.useReconstructValue(props);
-		const finalValue = this.transformationHook(rawValue);
-		const contextSubscriberValue = this.contextSubscriberValueHook(
+		const finalValue = this.rawToFinalValueHook(rawValue);
+		const contextSelectorArgs = this.selectorArgsHook(
 			finalValue,
 			rawValue
 		);
 		this.subscriberContext.updateLastProviderValue(
 			internalContextData.id,
-			...contextSubscriberValue
+			...contextSelectorArgs
 		);
 		let lastChildren = children;
 		for (const el of this.InternalHooks.arr) {
@@ -176,12 +176,12 @@ export class DynamicContext<
 		this.InternalHooks.version++;
 		const valueGetter = () => (hook(this.useValue()) as any) as R;
 
-		const contextSubscriberHookEqualityFn = dublicateEqualityFn(
-			this.useSubscriber
+		const selectorValueEqualityFn = dublicateEqualityFn(
+			this.useSelector
 		);
 
 		const dynamicContext = new DynamicContext(valueGetter, "value", {
-			contextSubscriberHookEqualityFn,
+			selectorValueEqualityFn,
 		}) as DynamicContext<ReturnType<Hook>, "value"> & { destroy: Destroy };
 		dynamicContext.setContextName(displayName);
 		const el: HookInfo<Value, R> = {
@@ -224,7 +224,7 @@ export class DynamicContext<
 
 	useValue = (): Value => {
 		const rawValue = this.useRawValue();
-		return this.transformationHook(rawValue);
+		return this.rawToFinalValueHook(rawValue);
 	};
 
 	useProperty = <
@@ -232,14 +232,14 @@ export class DynamicContext<
 	>(
 		key: K
 	): Value extends Record<any, any> ? Value[K] : never => {
-		return this.useSubscriber((val => val[key]) as any, []);
+		return this.useSelector((val => val[key]) as any, []);
 	};
 	useProperties = <
 		K extends Value extends Record<any, any> ? keyof Value : never
 	>(
 		...keys: K[]
 	): Value extends Record<any, any> ? Pick<Value, K> : never => {
-		return this.useSubscriber(
+		return this.useSelector(
 			(val => pickKeys(val, keys)) as any,
 			topPropsEquality,
 			[]
@@ -250,20 +250,20 @@ export class DynamicContext<
 		RawValue extends any,
 		K extends string | null,
 		Value = RawValue,
-		ContextSubscriberValue extends readonly any[] = [Value, () => RawValue]
+		ContextSelectorArgs extends readonly any[] = [Value, () => RawValue]
 	>(
 		defaultValue: RawValue | undefined,
 		key: K,
-		options?: DynamicContextOptions<RawValue, Value, ContextSubscriberValue>
+		options?: DynamicContextOptions<RawValue, Value, ContextSelectorArgs>
 	): DynamicContext<RawValue, K, Value>;
 	static create<
 		RawValue extends any,
 		Value = RawValue,
-		ContextSubscriberValue extends readonly any[] = [Value, () => RawValue]
+		ContextSelectorArgs extends readonly any[] = [Value, () => RawValue]
 	>(
 		defaultValue?: RawValue,
 		key?: undefined | "value",
-		options?: DynamicContextOptions<RawValue, Value, ContextSubscriberValue>
+		options?: DynamicContextOptions<RawValue, Value, ContextSelectorArgs>
 	): DynamicContext<RawValue, "value", Value>;
 	static create<RawValue extends any, Value = RawValue>(
 		defaultValue?: RawValue,
@@ -284,11 +284,11 @@ export class DynamicContext<
 	static createDestructured<
 		RawValue extends Record<any, any>,
 		Value = RawValue,
-		ContextSubscriberValue extends readonly any[] = [Value, () => RawValue]
+		ContextSelectorArgs extends readonly any[] = [Value, () => RawValue]
 	>(
 		defaultValue?: RawValue,
-		options?: DynamicContextOptions<RawValue, Value, ContextSubscriberValue>
-	): DynamicContext<RawValue, null, Value, ContextSubscriberValue> {
+		options?: DynamicContextOptions<RawValue, Value, ContextSelectorArgs>
+	): DynamicContext<RawValue, null, Value, ContextSelectorArgs> {
 		const valueGetter = () =>
 			((defaultValue === undefined
 				? EMPTY_VAL
@@ -298,7 +298,7 @@ export class DynamicContext<
 			RawValue,
 			null,
 			Value,
-			ContextSubscriberValue
+			ContextSelectorArgs
 		>(valueGetter, null, options);
 	}
 
@@ -350,7 +350,7 @@ interface HookInfo<Value extends any, R extends any> {
 
 type Destroy = () => void;
 
-const defaultContextSubscriberValueHook = <
+const defaultUseContextSelectorArgs = <
 	Value extends any,
 	RawValue extends any
 >(
@@ -362,7 +362,7 @@ const defaultContextSubscriberValueHook = <
 	return [value, () => rawValueRef.current] as const;
 };
 
-const defaultContextSubscriberEqualityFn = <T extends readonly any[]>(
+const defaultContextSelectorArgsEqualityFn = <T extends readonly any[]>(
 	prevVal: T,
 	newVal: T
 ) => {
@@ -384,21 +384,21 @@ function pickKeys<T extends {}, K extends keyof T>(
 const topPropsEquality = <T extends Record<any, any>>(obj1: T, obj2: T) =>
 	areDeeplyEqual(obj1, obj2, 1);
 
-export type DefSubscriberVal<Value, RawValue = Value> = [Value, () => RawValue];
+export type DefSelectorArgs<Value, RawValue = Value> = [Value, () => RawValue];
 
 export type DynamicContextOptions<
 	RawValue,
 	Value,
-	ContextSubscriberValue extends readonly any[]
+	ContextSelectorArgs extends readonly any[]
 > = {
-	transformationHook?: (data: RawValue) => Value;
-	contextSubscriberValueHook?: (
+	rawToFinalValueHook?: (data: RawValue) => Value;
+	selectorArgsHook?: (
 		value: Value,
 		rawValue: RawValue
-	) => ContextSubscriberValue;
-	contextSubscriberEqualityFn?: (
-		prevValue: ContextSubscriberValue,
-		nextValue: ContextSubscriberValue
+	) => ContextSelectorArgs;
+	selectorArgsEqualityFn?: (
+		prevValue: ContextSelectorArgs,
+		nextValue: ContextSelectorArgs
 	) => boolean;
-	contextSubscriberHookEqualityFn?: (prev: any, current: any) => boolean;
+	selectorValueEqualityFn?: (prev: any, current: any) => boolean;
 };

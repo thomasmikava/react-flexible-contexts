@@ -1,6 +1,6 @@
 type DependencyList = ReadonlyArray<any>;
 
-export interface ContextSubscriberMiniHook<Data extends readonly any[]> {
+export interface ContextSelectorMiniHook<Data extends readonly any[]> {
 	(): Data;
 	<T>(fn: (...rootData: Data) => T, deps: DependencyList | null): T;
 	<T>(
@@ -9,11 +9,11 @@ export interface ContextSubscriberMiniHook<Data extends readonly any[]> {
 		deps: DependencyList | null
 	): T;
 }
-export interface ContextSubscriberHook<Data extends readonly any[]>
-	extends ContextSubscriberMiniHook<Data> {
+export interface ContextSelectorHook<Data extends readonly any[]>
+	extends ContextSelectorMiniHook<Data> {
 	extendHook<T extends readonly any[]>(
 		fn: (...rootData: Data) => T
-	): ContextSubscriberHook<T>;
+	): ContextSelectorHook<T>;
 	setEqualityFn(equalityFn: (prevValue: any, newValue: any) => boolean): void;
 	getEqualityFnInfo: () => {
 		isDefaultFn: boolean;

@@ -1,16 +1,16 @@
 import { DynamicContext } from "./dynamic";
 import { StackedContext } from "./stacked";
 import {
-	ContextSubscriberMiniHook,
-	ContextSubscriberHook,
+	ContextSelectorMiniHook,
+	ContextSelectorHook,
 } from "./subscriber/interfaces";
 import { nestData, useNestedData, createDeepMergeFn } from "./utils";
 
 export {
 	DynamicContext,
 	StackedContext,
-	ContextSubscriberMiniHook,
-	ContextSubscriberHook,
+	ContextSelectorMiniHook,
+	ContextSelectorHook,
 	nestData,
 	useNestedData,
 	createDeepMergeFn,

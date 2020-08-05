@@ -1,13 +1,13 @@
 import React, { useContext } from "react";
 import { Subscription } from "./subscription";
-import { ContextSubscraberValue, ContextSubscriberHook } from "./interfaces";
-import { createContextSubscriberHook } from "./hook";
+import { ContextSubscraberValue, ContextSelectorHook } from "./interfaces";
+import { createContextSelectorHook } from "./hook";
 
 const EMPTY_VAL = `__$$emptyValue:-r$H5*AUg&TPWUkH_fPbLLNJQfHF4WQ%&rey)qCJP+]83~J^v__$$`;
 
 export class ContextSubscriber<Data extends readonly any[]> {
 	readonly context: React.Context<ContextSubscraberValue<Data>>;
-	readonly useSubscriber: ContextSubscriberHook<Data>;
+	readonly useSelector: ContextSelectorHook<Data>;
 	private readonly defaultProvider: ContextSubscraberValue<Data>;
 
 	private readonly useGettingDefaultValue = () => {
@@ -29,7 +29,7 @@ export class ContextSubscriber<Data extends readonly any[]> {
 	) {
 		this.defaultProvider = this.registerNewProvider();
 		this.context = React.createContext(this.defaultProvider);
-		this.useSubscriber = createContextSubscriberHook(
+		this.useSelector = createContextSelectorHook(
 			this.context,
 			this.defaultProvider.id,
 			this.useGettingDefaultValue
