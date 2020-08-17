@@ -56,15 +56,12 @@ export class DynamicContext<
 			: undefined;
 		const selectorValueEqualityFn =
 			options && options.selectorValueEqualityFn;
-		const selectorArgsHook = options
-			? options.selectorArgsHook
-			: undefined;
+		const selectorArgsHook = options ? options.selectorArgsHook : undefined;
 		if (!selectorArgsHook) {
 			selectorArgsEqualityFn = defaultContextSelectorArgsEqualityFn;
 		}
 		this.selectorArgsHook =
-			selectorArgsHook ||
-			(defaultUseContextSelectorArgs as any);
+			selectorArgsHook || (defaultUseContextSelectorArgs as any);
 		this.subscriberContext = new ContextSubscriber<ContextSelectorArgs>(
 			this.getSubscriberContextDefaultValue,
 			selectorArgsEqualityFn
@@ -139,10 +136,7 @@ export class DynamicContext<
 		const RawProvider = this.RawProvider;
 		const rawValue = this.useReconstructValue(props);
 		const finalValue = this.rawToFinalValueHook(rawValue);
-		const contextSelectorArgs = this.selectorArgsHook(
-			finalValue,
-			rawValue
-		);
+		const contextSelectorArgs = this.selectorArgsHook(finalValue, rawValue);
 		this.subscriberContext.updateLastProviderValue(
 			internalContextData.id,
 			...contextSelectorArgs
@@ -176,9 +170,7 @@ export class DynamicContext<
 		this.InternalHooks.version++;
 		const valueGetter = () => (hook(this.useValue()) as any) as R;
 
-		const selectorValueEqualityFn = dublicateEqualityFn(
-			this.useSelector
-		);
+		const selectorValueEqualityFn = dublicateEqualityFn(this.useSelector);
 
 		const dynamicContext = new DynamicContext(valueGetter, "value", {
 			selectorValueEqualityFn,
@@ -294,12 +286,11 @@ export class DynamicContext<
 				? EMPTY_VAL
 				: defaultValue) as any) as RawValue;
 
-		return new DynamicContext<
-			RawValue,
+		return new DynamicContext<RawValue, null, Value, ContextSelectorArgs>(
+			valueGetter,
 			null,
-			Value,
-			ContextSelectorArgs
-		>(valueGetter, null, options);
+			options
+		);
 	}
 
 	private static createDestructuredProvider<Value extends {}>(
@@ -339,7 +330,7 @@ const areEqual = (obj1: object, obj2: object): boolean => {
 	return true;
 };
 
-interface MinimalComponent<P = {}> {
+export interface MinimalComponent<P = {}> {
 	(props: P & { children?: React.ReactNode }): React.ReactElement | null;
 }
 
@@ -350,10 +341,7 @@ interface HookInfo<Value extends any, R extends any> {
 
 type Destroy = () => void;
 
-const defaultUseContextSelectorArgs = <
-	Value extends any,
-	RawValue extends any
->(
+const defaultUseContextSelectorArgs = <Value extends any, RawValue extends any>(
 	value: Value,
 	rawValue: RawValue
 ) => {
