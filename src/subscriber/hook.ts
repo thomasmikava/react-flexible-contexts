@@ -48,14 +48,22 @@ export const createContextSelectorHook = <Data extends readonly any[]>(
 		const transformedValueRef = useRef(transformedInitialValue);
 
 		useLayoutEffect(() => {
-			return subscribe((...data) => {
+			let isCancelled = false;
+			const unsubscribe = subscribe((...data) => {
 				const value = fnRef.current(...data);
 				if (areDataEqual(transformedValueRef.current, value)) {
 					return;
 				}
 				transformedValueRef.current = value;
-				setTimeout(() => forceUpdate(), 0);
+				setTimeout(() => {
+					if (isCancelled) return;
+					forceUpdate();
+				}, 0);
 			});
+			return () => {
+				isCancelled = true;
+				unsubscribe();
+			}
 		}, [subscribe]);
 
 		useCustomMemoHook(() => {
@@ -157,7 +165,7 @@ const getArgs = <T, Data extends readonly any[]>(
 	}
 	let areDataEqual: (prevValue: T, newValue: T) => boolean =
 		defaultEqualityFn || shallowCompare;
-	let deps: DependencyList | null = [];
+	let deps: DependencyList | null = null;
 	const fn: (...rootData: Data) => T = args[0] ? args[0] : defaultTransformer;
 
 	if (args.length > 2) {
@@ -166,11 +174,10 @@ const getArgs = <T, Data extends readonly any[]>(
 	} else if (args[1] !== undefined) {
 		if (Array.isArray(args[1]) || args[1] === null) {
 			deps = args[1];
-		} else {
+		} else if (typeof args[1] === "function") {
 			areDataEqual = args[1];
 		}
 	}
-	if (deps === undefined) deps = [];
 	if (!args[0]) {
 		areDataEqual = defaultEqualityFn || (depsShallowEquality as any);
 	}

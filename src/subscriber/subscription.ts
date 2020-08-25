@@ -1,5 +1,5 @@
 export class Subscription<T extends readonly any[], Meta = {}> {
-	private subscribers: ((...data: T) => void)[];
+	private subscribers: {fn: ((...data: T) => void); isCancelled?: true }[];
 	private metaData: Meta;
 
 	constructor(defaultMetaData?: Meta) {
@@ -21,16 +21,22 @@ export class Subscription<T extends readonly any[], Meta = {}> {
 	};
 
 	subscribe = <L extends T = T>(fn: (...data: L) => void): Unsubscribe => {
-		this.subscribers.push(fn);
+		this.subscribers.push({ fn });
 		return () => {
-			this.subscribers = this.subscribers.filter(e => e !== fn);
+			this.subscribers = this.subscribers.filter(e => {
+				if (e.fn === fn) {
+					e.isCancelled = true;
+				}
+				return e.fn !== fn;
+			});
 		};
 	};
 
 	broadcast = (...data: T) => {
 		const arr = this.subscribers;
-		for (const fn of arr) {
-			fn(...data);
+		for (const el of arr) {
+			if (el.isCancelled) continue;
+			el.fn(...data);
 		}
 	};
 

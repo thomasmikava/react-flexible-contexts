@@ -2,11 +2,11 @@ type DependencyList = ReadonlyArray<any>;
 
 export interface ContextSelectorMiniHook<Data extends readonly any[]> {
 	(): Data;
-	<T>(fn: (...rootData: Data) => T, deps: DependencyList | null): T;
+	<T>(fn: (...rootData: Data) => T, deps?: DependencyList | null): T;
 	<T>(
 		fn: (...rootData: Data) => T,
 		areDataEqual: (prevValue: T, newValue: T) => boolean,
-		deps: DependencyList | null
+		deps?: DependencyList | null
 	): T;
 }
 export interface ContextSelectorHook<Data extends readonly any[]>
