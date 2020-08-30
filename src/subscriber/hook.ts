@@ -1,5 +1,5 @@
 import { ContextSelectorHook, ContextSubscraberValue } from "./interfaces";
-import React, { useContext, useState, useRef, useLayoutEffect } from "react";
+import React, { useContext, useState, useRef, useLayoutEffect, useEffect } from "react";
 import { createMemoHook, useForceUpdate } from "../hooks";
 import { depsShallowEquality } from "../equality-functions";
 type DependencyList = ReadonlyArray<any>;
@@ -26,19 +26,19 @@ export const createContextSelectorHook = <Data extends readonly any[]>(
 		deps?: DependencyList | null
 	);
 	function useContextValue<T>(...args: any[]) {
-		const [fn, areDataEqual, deps] = getArgs<T, Data>(
+		const [fn, areDataEqual, deps, passedLabel] = getArgs<T, Data>(
 			args,
 			defaultEqualityFn
 		);
 
+		const [label] = useState(passedLabel);
 		const fnRef = useRef(fn);
-		fnRef.current = fn;
 		const areDataEqualRef = useRef(areDataEqual);
-		areDataEqualRef.current = areDataEqual;
+		const latestSubscriptionCallbackErrorRef = useRef<any>();
 
 		const forceUpdate = useForceUpdate();
 
-		const { getLatestValue, subscribe, id } = useContext(context);
+		const { getLatestValue, asyncReverseOrderSubscribe, id } = useContext(context);
 		if (id === defaultProviderId) {
 			useGettingDefaultValue();
 		}
@@ -47,32 +47,64 @@ export const createContextSelectorHook = <Data extends readonly any[]>(
 		});
 		const transformedValueRef = useRef(transformedInitialValue);
 
+		let selectedState: T;
+		try {
+			if (
+			  latestSubscriptionCallbackErrorRef.current
+			) {
+			  selectedState = fn(...getLatestValue());
+			} else {
+			  selectedState = transformedValueRef.current
+			}
+		  } catch (err) {
+			if (latestSubscriptionCallbackErrorRef.current) {
+			  err.message += `\nLabel: ${label}\n`;
+			  err.message += `\nThe error may be correlated with this previous error:\n${latestSubscriptionCallbackErrorRef.current.stack}\n\n`
+			}
+			throw err;
+		}
+
+		useLayoutEffect(() => {
+			fnRef.current = fn;
+			areDataEqualRef.current = areDataEqual;
+			transformedValueRef.current = selectedState;
+			latestSubscriptionCallbackErrorRef.current = undefined
+		});
+
 		useLayoutEffect(() => {
 			let isCancelled = false;
-			const unsubscribe = subscribe((...data) => {
-				const value = fnRef.current(...data);
-				if (areDataEqual(transformedValueRef.current, value)) {
-					return;
+			const unsubscribe = asyncReverseOrderSubscribe((...data: Data) => {
+				if (isCancelled) return;
+				try {
+					const value = fnRef.current(...data);
+					if (areDataEqual(transformedValueRef.current, value)) {
+						return;
+					}
+					transformedValueRef.current = value;
+				} catch (err) {
+					// we ignore all errors here, since when the component
+					// is re-rendered, the selectors are called again, and
+					// will throw again
+					latestSubscriptionCallbackErrorRef.current = err;
 				}
-				transformedValueRef.current = value;
 				setTimeout(() => {
 					if (isCancelled) return;
 					forceUpdate();
 				}, 0);
-			});
+			}, label);
 			return () => {
 				isCancelled = true;
 				unsubscribe();
 			}
-		}, [subscribe]);
+		}, [label]);
 
 		useCustomMemoHook(() => {
 			const value = fnRef.current(...getLatestValue());
-			if (areDataEqual(transformedValueRef.current, value)) return;
-			transformedValueRef.current = value;
+			if (areDataEqual(selectedState, value)) return;
+			selectedState = value;
 		}, deps);
 
-		return transformedValueRef.current;
+		return selectedState;
 	}
 	(useContextValue as ContextSelectorHook<Data>).extendHook = function<
 		T extends readonly any[]
@@ -163,6 +195,11 @@ const getArgs = <T, Data extends readonly any[]>(
 	if (isDefaultEquality(defaultEqualityFn)) {
 		defaultEqualityFn = undefined;
 	}
+	let label = undefined as undefined | string;
+	if (typeof args[args.length - 1] === "string") {
+		label = args[args.length - 1];
+		args = args.slice(0, args.length - 1);
+	}
 	let areDataEqual: (prevValue: T, newValue: T) => boolean =
 		defaultEqualityFn || shallowCompare;
 	let deps: DependencyList | null = null;
@@ -181,5 +218,5 @@ const getArgs = <T, Data extends readonly any[]>(
 	if (!args[0]) {
 		areDataEqual = defaultEqualityFn || (depsShallowEquality as any);
 	}
-	return [fn, areDataEqual, deps || EMPTY_DEPS] as const;
+	return [fn, areDataEqual, deps || EMPTY_DEPS, label] as const;
 };

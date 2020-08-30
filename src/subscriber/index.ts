@@ -69,6 +69,7 @@ export class ContextSubscriber<Data extends readonly any[]> {
 			id,
 			getLatestValue: () => this.getValue(id),
 			subscribe: subscription.subscribe,
+			asyncReverseOrderSubscribe: subscription.asyncReverseOrderSubscribe,
 		};
 	};
 

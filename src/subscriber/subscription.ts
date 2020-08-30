@@ -1,5 +1,5 @@
 export class Subscription<T extends readonly any[], Meta = {}> {
-	private subscribers: {fn: ((...data: T) => void); isCancelled?: true }[];
+	private subscribers: {fn: ((...data: T) => void); isCancelled?: true; label?: string }[];
 	private metaData: Meta;
 
 	constructor(defaultMetaData?: Meta) {
@@ -20,24 +20,47 @@ export class Subscription<T extends readonly any[], Meta = {}> {
 		return this.metaData;
 	};
 
-	subscribe = <L extends T = T>(fn: (...data: L) => void): Unsubscribe => {
-		this.subscribers.push({ fn });
+	subscribe = <L extends T = T>(fn: (...data: L) => void, label?: string): Unsubscribe => {
+		this.subscribers = [...this.subscribers, { fn, label }];
+		return this.getUnsubscribeFn(fn);
+	};
+
+	private cSubscribers: {fn: ((...data: T) => void); isCancelled?: true; label?: string }[] = [];
+	private planned?: number;
+
+	asyncReverseOrderSubscribe = <L extends T = T>(fn: (...data: L) => void, label?: string): Unsubscribe => {
+		this.cSubscribers.push({ fn, label });
+		if (this.planned) {
+			clearTimeout(this.planned);
+		}
+		this.planned = setTimeout(() => {
+			this.subscribers = [...this.subscribers, ...[...this.cSubscribers].reverse()];
+			this.cSubscribers = [];
+		}, 0);
+		return this.getUnsubscribeFn(fn);
+	};
+
+	private getUnsubscribeFn = (fn: () => void) => {
 		return () => {
 			this.subscribers = this.subscribers.filter(e => {
-				if (e.fn === fn) {
+				if (e.isCancelled || e.fn === fn) {
 					e.isCancelled = true;
+					return false;
 				}
-				return e.fn !== fn;
+				return true;
 			});
 		};
-	};
+	}
 
 	broadcast = (...data: T) => {
 		const arr = this.subscribers;
 		for (const el of arr) {
-			if (el.isCancelled) continue;
+			if (el.isCancelled) {
+				continue;
+			}
 			el.fn(...data);
 		}
+		this.subscribers = this.subscribers.filter(e => !e.isCancelled);
 	};
 
 	clearSubscribers = () => {
