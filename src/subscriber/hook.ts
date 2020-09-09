@@ -1,5 +1,5 @@
 import { ContextSelectorHook, ContextSubscraberValue } from "./interfaces";
-import React, { useContext, useState, useRef, useLayoutEffect, useEffect } from "react";
+import React, { useContext, useState, useRef, useLayoutEffect } from "react";
 import { createMemoHook, useForceUpdate } from "../hooks";
 import { depsShallowEquality } from "../equality-functions";
 type DependencyList = ReadonlyArray<any>;
@@ -33,12 +33,16 @@ export const createContextSelectorHook = <Data extends readonly any[]>(
 
 		const [label] = useState(passedLabel);
 		const fnRef = useRef(fn);
+		fnRef.current = fn;
 		const areDataEqualRef = useRef(areDataEqual);
+		areDataEqualRef.current = areDataEqual;
 		const latestSubscriptionCallbackErrorRef = useRef<any>();
 
 		const forceUpdate = useForceUpdate();
 
-		const { getLatestValue, asyncReverseOrderSubscribe, id } = useContext(context);
+		const { getLatestValue, asyncReverseOrderSubscribe, id } = useContext(
+			context
+		);
 		if (id === defaultProviderId) {
 			useGettingDefaultValue();
 		}
@@ -49,35 +53,37 @@ export const createContextSelectorHook = <Data extends readonly any[]>(
 
 		let selectedState: T;
 		try {
-			if (
-			  latestSubscriptionCallbackErrorRef.current
-			) {
-			  selectedState = fn(...getLatestValue());
-			} else {
-			  selectedState = transformedValueRef.current
-			}
-		  } catch (err) {
 			if (latestSubscriptionCallbackErrorRef.current) {
-			  err.message += `\nLabel: ${label}\n`;
-			  err.message += `\nThe error may be correlated with this previous error:\n${latestSubscriptionCallbackErrorRef.current.stack}\n\n`
+				selectedState = fn(...getLatestValue());
+			} else {
+				selectedState = transformedValueRef.current;
+			}
+		} catch (err) {
+			if (latestSubscriptionCallbackErrorRef.current) {
+				err.message += `\nLabel: ${label}\n`;
+				err.message += `\nThe error may be correlated with this previous error:\n${latestSubscriptionCallbackErrorRef.current.stack}\n\n`;
 			}
 			throw err;
 		}
 
 		useLayoutEffect(() => {
-			fnRef.current = fn;
-			areDataEqualRef.current = areDataEqual;
 			transformedValueRef.current = selectedState;
-			latestSubscriptionCallbackErrorRef.current = undefined
+			latestSubscriptionCallbackErrorRef.current = undefined;
 		});
 
 		useLayoutEffect(() => {
 			let isCancelled = false;
-			const unsubscribe = asyncReverseOrderSubscribe((...data: Data) => {
+			const cb = (delay: boolean, ...data: Data) => {
 				if (isCancelled) return;
+				let time = 0;
 				try {
 					const value = fnRef.current(...data);
-					if (areDataEqual(transformedValueRef.current, value)) {
+					if (
+						areDataEqualRef.current(
+							transformedValueRef.current,
+							value
+						)
+					) {
 						return;
 					}
 					transformedValueRef.current = value;
@@ -86,16 +92,29 @@ export const createContextSelectorHook = <Data extends readonly any[]>(
 					// is re-rendered, the selectors are called again, and
 					// will throw again
 					latestSubscriptionCallbackErrorRef.current = err;
+					time = 0;
 				}
-				setTimeout(() => {
-					if (isCancelled) return;
+				if (delay) {
+					setTimeout(() => {
+						if (isCancelled) return;
+						forceUpdate();
+					}, time);
+				} else {
 					forceUpdate();
-				}, 0);
-			}, label);
+				}
+			};
+			const unsubscribe = asyncReverseOrderSubscribe(
+				(...args) => cb(true, ...args),
+				label
+			);
+			setTimeout(() => {
+				if (isCancelled) return;
+				cb(false, ...getLatestValue());
+			}, 0);
 			return () => {
 				isCancelled = true;
 				unsubscribe();
-			}
+			};
 		}, [label]);
 
 		useCustomMemoHook(() => {
