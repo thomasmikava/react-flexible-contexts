@@ -2,7 +2,7 @@ import { Subscription } from "./subscription";
 import { useEffect, useReducer } from "react";
 
 export const useReRenderSubscription = (
-	subscription: Subscription<[], any>
+	subscription: Subscription<() => void, any>
 ) => {
 	const forceUpdate = useForceUpdate();
 	useEffect(() => {

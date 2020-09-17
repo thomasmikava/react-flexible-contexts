@@ -78,7 +78,7 @@ export class DynamicContext<
 		return this.selectorArgsHook(finalValue, rawValue);
 	};
 
-	private defValueReRenders = new Subscription<[]>();
+	private defValueReRenders = new Subscription();
 
 	setContextName(name: string | undefined) {
 		this.mainContext.displayName = name;
