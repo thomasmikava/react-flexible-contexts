@@ -43,7 +43,10 @@ export class ContextSubscriber<Data extends readonly any[]> {
 	private counter = 0;
 
 	private lastValuesByProviderIds: Record<any, Data> = {};
-	private subscriptionsByProviderIds: Record<any, Subscription<(...args: Data) => void>> = {};
+	private subscriptionsByProviderIds: Record<
+		any,
+		Subscription<(...args: Data) => void>
+	> = {};
 
 	updateLastProviderValue = (id: IdType, ...value: Data) => {
 		const isInitialCall = !this.lastValuesByProviderIds.hasOwnProperty(id);
@@ -51,7 +54,7 @@ export class ContextSubscriber<Data extends readonly any[]> {
 		this.lastValuesByProviderIds[id] = value;
 		if (!isInitialCall && !this.equalityFn(oldValue, value)) {
 			type R = Parameters<(...args: Data) => void>;
-			this.subscriptionsByProviderIds[id].broadcast(...value as any);
+			this.subscriptionsByProviderIds[id].broadcast(...(value as any));
 		}
 	};
 

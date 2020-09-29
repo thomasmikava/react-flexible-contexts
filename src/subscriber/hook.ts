@@ -4,6 +4,17 @@ import { createMemoHook, useForceUpdate } from "../hooks";
 import { depsShallowEquality } from "../equality-functions";
 type DependencyList = ReadonlyArray<any>;
 
+let rerenderSynchronously = false;
+
+export const setRerenderSynchronouslyValue = (value: boolean) => {
+	if (typeof value !== "boolean") {
+		throw new Error(
+			`value of rerenderSynchronously must be boolean. received ${value}`
+		);
+	}
+	rerenderSynchronously = !!value;
+};
+
 const EMPTY_DEPS = [
 	`__$$EMPTY:%$W,w_&te-nw~[rzSETQK5{CB9V?F&+8n_m\nFZB?:fW]Y2QG$$__`,
 ];
@@ -73,7 +84,7 @@ export const createContextSelectorHook = <Data extends readonly any[]>(
 
 		useLayoutEffect(() => {
 			let isCancelled = false;
-			const cb = (delay: boolean, ...data: Data) => {
+			const cb = (renderSync: boolean, ...data: Data) => {
 				if (isCancelled) return;
 				let time = 0;
 				try {
@@ -94,22 +105,23 @@ export const createContextSelectorHook = <Data extends readonly any[]>(
 					latestSubscriptionCallbackErrorRef.current = err;
 					time = 0;
 				}
-				if (delay) {
+				if (renderSync) {
+					forceUpdate();
+				} else {
 					setTimeout(() => {
 						if (isCancelled) return;
 						forceUpdate();
 					}, time);
-				} else {
-					forceUpdate();
 				}
 			};
 			const unsubscribe = asyncReverseOrderSubscribe(
-				(...args) => cb(true, ...args),
+				(...args) =>
+					cb(rerenderSynchronously, ...((args as any) as Data)),
 				label
 			);
 			setTimeout(() => {
 				if (isCancelled) return;
-				cb(false, ...getLatestValue());
+				cb(true, ...getLatestValue());
 			}, 0);
 			return () => {
 				isCancelled = true;

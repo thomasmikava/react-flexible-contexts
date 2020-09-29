@@ -1,4 +1,7 @@
-export class Subscription<Fn extends (...args: readonly unknown[]) => unknown = () => void, Meta = {}> {
+export class Subscription<
+	Fn extends (...args: readonly unknown[]) => unknown = () => void,
+	Meta = {}
+> {
 	private subscribers: {
 		fn: Fn;
 		isCancelled?: true;
@@ -24,10 +27,7 @@ export class Subscription<Fn extends (...args: readonly unknown[]) => unknown = 
 		return this.metaData;
 	};
 
-	subscribe = (
-		fn: Fn,
-		label?: string
-	): Unsubscribe => {
+	subscribe = (fn: Fn, label?: string): Unsubscribe => {
 		this.subscribers = [...this.subscribers, { fn, label }];
 		return this.getUnsubscribeFn(fn);
 	};
@@ -39,10 +39,7 @@ export class Subscription<Fn extends (...args: readonly unknown[]) => unknown = 
 	}[] = [];
 	private planned?: number;
 
-	asyncReverseOrderSubscribe = (
-		fn: Fn,
-		label?: string
-	): Unsubscribe => {
+	asyncReverseOrderSubscribe = (fn: Fn, label?: string): Unsubscribe => {
 		this.cSubscribers.push({ fn, label });
 		if (this.planned) {
 			clearTimeout(this.planned);
@@ -69,7 +66,9 @@ export class Subscription<Fn extends (...args: readonly unknown[]) => unknown = 
 		};
 	};
 
-	broadcast = <Par extends Parameters<Fn>>(...data: Par): ReturnType<Fn>[] => {
+	broadcast = <Par extends Parameters<Fn>>(
+		...data: Par
+	): ReturnType<Fn>[] => {
 		const arr = this.subscribers;
 		const results: ReturnType<Fn>[] = [];
 		for (const el of arr) {

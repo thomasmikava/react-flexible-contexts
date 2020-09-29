@@ -2,7 +2,11 @@ type DependencyList = ReadonlyArray<any>;
 
 export interface ContextSelectorMiniHook<Data extends readonly any[]> {
 	(): Data;
-	<T>(fn: (...rootData: Data) => T, deps?: DependencyList | null, label?: string): T;
+	<T>(
+		fn: (...rootData: Data) => T,
+		deps?: DependencyList | null,
+		label?: string
+	): T;
 	<T>(
 		fn: (...rootData: Data) => T,
 		areDataEqual: (prevValue: T, newValue: T) => boolean,
@@ -22,7 +26,10 @@ export interface ContextSelectorHook<Data extends readonly any[]>
 	};
 }
 
-export type SubscribeFn<Data extends readonly any[]> = (fn: (...data: Data) => void, label?: string) => Unsubscribe;
+export type SubscribeFn<Data extends readonly any[]> = (
+	fn: (...data: Data) => void,
+	label?: string
+) => Unsubscribe;
 export interface ContextSubscraberValue<Data extends readonly any[]> {
 	id: number;
 	getLatestValue: () => Data;

@@ -50,5 +50,5 @@ export const usePropsMemo = createMemoHook(propsEqualityFactory(1));
 
 export const useForceUpdate = () => {
 	const [, forceUpdate] = useReducer(x => x + 1, 0);
-	return forceUpdate as any as () => void;
+	return (forceUpdate as any) as () => void;
 };

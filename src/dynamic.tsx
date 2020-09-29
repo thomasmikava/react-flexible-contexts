@@ -22,6 +22,7 @@ export class DynamicContext<
 	private rawToFinalValueHook: (data: RawValue) => Value;
 	private subscriberContext: ContextSubscriber<ContextSelectorArgs>;
 	private readonly mainContext: React.Context<RawValue>;
+	private displayName: string | undefined;
 
 	readonly useSelector: ContextSelectorHook<ContextSelectorArgs>;
 	private readonly selectorArgsHook: (
@@ -44,6 +45,7 @@ export class DynamicContext<
 			this.key = key;
 		}
 		this.mainContext = React.createContext<RawValue>(EMPTY_VAL as any);
+		this.displayName = this.mainContext.displayName;
 		this.defaultValueGetter = defaultValueGetter;
 		const rawToFinalValueHook = options
 			? options.rawToFinalValueHook
@@ -82,6 +84,7 @@ export class DynamicContext<
 
 	setContextName(name: string | undefined) {
 		this.mainContext.displayName = name;
+		this.displayName = name;
 	}
 
 	setDefaultValue(rawValue: RawValue) {
@@ -143,9 +146,12 @@ export class DynamicContext<
 		);
 		let lastChildren = children;
 		for (const el of this.InternalHooks.arr) {
-			const Provider = el.dynamicContext.Provider;
 			const val = el.hook(finalValue);
-			lastChildren = <Provider value={val}>{lastChildren}</Provider>;
+			const InnerProvider = el.dynamicContext.Provider;
+			const innerProps = el.dynamicContext.rawValueToProps(val);
+			lastChildren = (
+				<InnerProvider {...innerProps}>{lastChildren}</InnerProvider>
+			);
 		}
 		const Int = this.subscriberContext.context.Provider;
 		return (
@@ -165,17 +171,38 @@ export class DynamicContext<
 	addInternalContext<Hook extends (value: Value) => any>(
 		hook: Hook,
 		displayName?: string
-	): DynamicContext<ReturnType<Hook>, "value"> & { destroy: Destroy } {
+	): DynamicContext<ReturnType<Hook>, "value"> & { destroy: Destroy };
+	addInternalContext<Hook extends (value: Value) => any>(
+		hook: Hook,
+		dynamicContext: DynamicContext<ReturnType<Hook>, any, any, any>
+	): { destroy: Destroy };
+	addInternalContext<Hook extends (value: Value) => any>(
+		hook: Hook,
+		arg2?: string | DynamicContext<ReturnType<Hook>, "value"> | undefined
+	):
+		| (DynamicContext<ReturnType<Hook>, "value"> & { destroy: Destroy })
+		| { destroy: Destroy } {
 		type R = ReturnType<Hook>;
+		type DContext = DynamicContext<ReturnType<Hook>, "value"> & {
+			destroy: Destroy;
+		};
+		let dynamicContext: DContext;
 		this.InternalHooks.version++;
-		const valueGetter = () => (hook(this.useValue()) as any) as R;
+		if (!(arg2 instanceof DynamicContext)) {
+			const displayName = arg2;
+			const valueGetter = () => (hook(this.useValue()) as any) as R;
 
-		const selectorValueEqualityFn = dublicateEqualityFn(this.useSelector);
+			const selectorValueEqualityFn = dublicateEqualityFn(
+				this.useSelector
+			);
 
-		const dynamicContext = new DynamicContext(valueGetter, "value", {
-			selectorValueEqualityFn,
-		}) as DynamicContext<ReturnType<Hook>, "value"> & { destroy: Destroy };
-		dynamicContext.setContextName(displayName);
+			dynamicContext = new DynamicContext(valueGetter, "value", {
+				selectorValueEqualityFn,
+			}) as DContext;
+			dynamicContext.setContextName(displayName);
+		} else {
+			dynamicContext = arg2 as DContext;
+		}
 		const el: HookInfo<Value, R> = {
 			hook,
 			dynamicContext,
@@ -187,6 +214,9 @@ export class DynamicContext<
 			this.InternalHooks.version++;
 			this.InternalHooks.arr.splice(index, 1);
 		};
+		if (arg2 instanceof DynamicContext) {
+			return { destroy };
+		}
 		dynamicContext.destroy = destroy;
 		return dynamicContext;
 	}
@@ -213,6 +243,13 @@ export class DynamicContext<
 		);
 		return Provider;
 	}
+
+	private rawValueToProps = (rawValue: RawValue): any => {
+		if (typeof this.key === "string") {
+			return { [this.key]: rawValue };
+		}
+		return rawValue;
+	};
 
 	useValue = (): Value => {
 		const rawValue = this.useRawValue();
