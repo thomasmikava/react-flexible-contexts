@@ -27,11 +27,11 @@ const ParentComponent = () => {
 	const [lastname, setLastname] = useState("Fury");
 
 	return (
-		<UserContext
+		<UserContext.Provider
 			value={{ firstname, lastname, setFirstname, setLastname }}
 		>
 			<ChildComponent />
-		</UserContext>
+		</UserContext.Provider>
 	);
 };
 ```
@@ -47,14 +47,14 @@ const ParentComponent = () => {
 	const [lastname, setLastname] = useState("Fury");
 
 	return (
-		<UserContext
+		<UserDestructuredContext.Provider
 			firstname={firstname}
 			lastname={lastname}
 			setFirstname={setFirstname}
 			setLastname={setLastname}
 		>
 			<ChildComponent />
-		</UserContext>
+		</UserDestructuredContext.Provider>
 	);
 };
 ```
@@ -144,6 +144,11 @@ const DescendantComponent = () => {
 ### Known gotchas
 Since forcingly rerendering components while other components are rendered, Dynamic context asynchronously updates it's context value and there might be possible loss of cursor position when using controllable input with useSelector/useProperty/useProperties;
 
+You can call setRerenderSynchronouslyValue once in an application and pass true. the default value is false.
+```ts
+import { setRerenderSynchronouslyValue } from "react-flexible-contexts";
+setRerenderSynchronouslyValue(true);
+```
 <br>
 
 ## Stacked Context
