@@ -117,3 +117,27 @@ export function createDeepMergeFn({
 		return obj1;
 	};
 }
+
+export function useMemoizedProps<Props extends Record<any, any>>(
+	props: Props
+): Props;
+export function useMemoizedProps<Props extends Record<any, any>>(
+	props: Props,
+	flag: "skipChildren"
+): Omit<Props, "children">;
+export function useMemoizedProps<Props extends Record<any, any>>(
+	props: Props,
+	flag?: "skipChildren"
+): Props {
+	const keys = Object.keys(props).sort();
+	const deps: any[] = [];
+	for (let i = 0; i < keys.length; ++i) {
+		const key = keys[i];
+		if (flag === "skipChildren" && key === "children") continue;
+		deps.push(key, props[key]);
+	}
+	return useMemo(() => {
+		const { children, ...rest } = props;
+		return rest as any;
+	}, deps);
+}

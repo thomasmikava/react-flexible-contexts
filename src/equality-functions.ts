@@ -1,5 +1,3 @@
-type DependencyList = readonly any[];
-
 export const depsShallowEquality = (oldDeps: any[], newDeps: any[]) => {
 	if (!Array.isArray(oldDeps) || !Array.isArray(newDeps)) {
 		return oldDeps === newDeps;
@@ -35,23 +33,4 @@ export const areDeeplyEqual = <T1 extends any, T2 extends any>(
 		}
 	}
 	return true;
-};
-
-const createDependenciesEqualityFn = (
-	equalityFn: (obj1: any, obj2: any) => boolean
-) => (previous: DependencyList, current: DependencyList) => {
-	if (previous.length !== current.length) return false;
-	for (let i = 0; i < previous.length; i++) {
-		const prev = previous[i];
-		const next = current[i];
-		if (prev === next) continue;
-		if (!equalityFn(prev, next)) return false;
-	}
-	return true;
-};
-
-export const propsEqualityFactory = (depth: number) => {
-	return createDependenciesEqualityFn((obj1, obj2) =>
-		areDeeplyEqual(obj1, obj2, depth)
-	);
 };

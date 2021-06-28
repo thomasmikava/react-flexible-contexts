@@ -1,11 +1,11 @@
 import React, { useContext, useRef, useState, useEffect } from "react";
 import { ContextSubscriber } from "./subscriber";
 import { ContextSelectorHook } from "./subscriber/interfaces";
-import { usePropsMemo } from "./hooks";
 import { Subscription } from "./subscriber/subscription";
 import { useReRenderSubscription } from "./subscriber/re-render";
 import { areDeeplyEqual } from "./equality-functions";
 import { dublicateEqualityFn } from "./subscriber/hook";
+import { useMemoizedProps } from "./utils";
 
 const EMPTY_VAL = `__$$emptyValue:?#@#y7q!}fmhW)eL}L{b#b^(3$ZAMg.eyp6NL#h<N-S$)L<.=-j3WsMp&%2JDf6_vVdN7K."pg"_aswq"9CRS?!9YzG[}AD~Xb[E__$$`;
 
@@ -16,12 +16,18 @@ export class DynamicContext<
 	ContextSelectorArgs extends readonly any[] = DefSelectorArgs<
 		Value,
 		RawValue
-	>
+	>,
+	UnmodifiedRawValue = RawValue,
+	ProviderProps extends Record<any, any> = Key extends string
+		? Record<Key, UnmodifiedRawValue>
+		: UnmodifiedRawValue
 > {
 	private readonly RawProvider: MinimalComponent<any>;
 	private rawToFinalValueHook: (data: RawValue) => Value;
 	private subscriberContext: ContextSubscriber<ContextSelectorArgs>;
-	private readonly mainContext: React.Context<RawValue>;
+	private readonly mainContext: React.Context<
+		UnmodifiedRawValue | typeof EMPTY_VAL
+	>;
 	private displayName: string | undefined;
 
 	readonly useSelector: ContextSelectorHook<ContextSelectorArgs>;
@@ -36,7 +42,7 @@ export class DynamicContext<
 	};
 
 	private constructor(
-		private defaultValueGetter: () => RawValue,
+		private defaultValueGetter: () => UnmodifiedRawValue,
 		private readonly key?: Key,
 		options?: DynamicContextOptions<RawValue, Value, ContextSelectorArgs>
 	) {
@@ -44,7 +50,9 @@ export class DynamicContext<
 			key = "value" as Key;
 			this.key = key;
 		}
-		this.mainContext = React.createContext<RawValue>(EMPTY_VAL as any);
+		this.mainContext = React.createContext<
+			UnmodifiedRawValue | typeof EMPTY_VAL
+		>(EMPTY_VAL as any);
 		this.displayName = this.mainContext.displayName;
 		this.defaultValueGetter = defaultValueGetter;
 		const rawToFinalValueHook = options
@@ -52,7 +60,10 @@ export class DynamicContext<
 			: undefined;
 		this.rawToFinalValueHook =
 			rawToFinalValueHook || ((x: RawValue) => (x as any) as Value);
-		this.RawProvider = this.getRawProvider();
+		this.RawProvider = getRawProvider(
+			this.key as string | null,
+			this.mainContext
+		);
 		let selectorArgsEqualityFn = options
 			? options.selectorArgsEqualityFn
 			: undefined;
@@ -88,38 +99,42 @@ export class DynamicContext<
 	}
 
 	setDefaultValue(rawValue: RawValue) {
-		this.defaultValueGetter = () => rawValue;
-		this.subscriberContext.setDefaultValueGetter(() =>
-			this.getSubscriberContextDefaultValue()
-		);
-		this.defValueReRenders.broadcast();
+		this.setDefaultValueGetter(() => rawValue);
 	}
 
 	setDefaultValueGetter(fn: () => RawValue) {
-		this.defaultValueGetter = fn;
+		this.defaultValueGetter = getDefaultValueFn(
+			fn,
+			() => this.defaultValueUnModifierFn
+		);
 		this.subscriberContext.setDefaultValueGetter(() =>
 			this.getSubscriberContextDefaultValue()
 		);
 		this.defValueReRenders.broadcast();
 	}
 
-	useRawValue = (): RawValue => {
+	useUnmodifiedRawValue = (): UnmodifiedRawValue => {
 		let contextValue = useContext(this.mainContext);
 		if (contextValue === EMPTY_VAL) {
 			useReRenderSubscription(this.defValueReRenders);
 			contextValue = this.defaultValueGetter();
 		}
-		if (contextValue === EMPTY_VAL) {
+		if ((contextValue as any) === EMPTY_VAL) {
 			throw new Error(
 				"Dynamic Context without deafult value must be used with provider"
 			);
 		}
-		return contextValue;
+		return contextValue as any;
 	};
 
-	Provider: MinimalComponent<
-		Key extends string ? Record<Key, RawValue> : RawValue
-	> = (props: any) => {
+	useRawValue = (): RawValue => {
+		const value = this.useUnmodifiedRawValue();
+		return !this.rawValueModifierHook
+			? (value as RawValue)
+			: this.rawValueModifierHook(value);
+	};
+
+	Provider: MinimalComponent<ProviderProps> = (props: any) => {
 		const Provider = this.providerHelper;
 		return <Provider {...props} key={this.InternalHooks.version} />;
 	};
@@ -161,11 +176,41 @@ export class DynamicContext<
 		);
 	};
 
-	private useReconstructValue(props: any): RawValue {
-		if (typeof this.key === "string") {
-			return props[this.key];
+	private rawValueModifierHook:
+		| ((rawValue: UnmodifiedRawValue) => RawValue)
+		| undefined = undefined;
+	private defaultValueModifierFn:
+		| ((rawValue: UnmodifiedRawValue) => RawValue)
+		| undefined = undefined;
+	private defaultValueUnModifierFn:
+		| ((rawValue: RawValue) => UnmodifiedRawValue)
+		| undefined = undefined;
+	private setRawValueModifiers(
+		defaultValueUnModifierFn: (rawValue: RawValue) => UnmodifiedRawValue,
+		defaultValueModifierFn: (rawValue: UnmodifiedRawValue) => RawValue,
+		rawValueModifierHook: (
+			rawValue: UnmodifiedRawValue
+		) => RawValue = defaultValueModifierFn
+	) {
+		this.defaultValueUnModifierFn = defaultValueUnModifierFn;
+		this.defaultValueModifierFn = defaultValueModifierFn;
+		this.rawValueModifierHook = rawValueModifierHook;
+	}
+	private modifiedDefaultValueGetter() {
+		if (this.defaultValueModifierFn) {
+			return this.defaultValueModifierFn(this.defaultValueGetter());
 		}
-		return usePropsMemo(() => props, [props]);
+		return this.defaultValueGetter();
+	}
+
+	private useReconstructValue(props: any): RawValue {
+		const contextRawValue =
+			typeof this.key === "string"
+				? props[this.key]
+				: useMemoizedProps(props);
+		return !this.rawValueModifierHook
+			? contextRawValue
+			: this.rawValueModifierHook(contextRawValue);
 	}
 
 	addInternalContext<Hook extends (value: Value) => any>(
@@ -221,29 +266,6 @@ export class DynamicContext<
 		return dynamicContext;
 	}
 
-	private getRawProvider(): MinimalComponent<any> {
-		const RawContextProvider = this.mainContext.Provider;
-		if (this.key === "value") return RawContextProvider;
-
-		if (typeof this.key === "string") {
-			const Provider: React.FC<Record<string, RawValue>> = props => {
-				const value = props[this.key as any] as RawValue;
-				const children = props.children;
-				return (
-					<RawContextProvider value={value}>
-						{children}
-					</RawContextProvider>
-				);
-			};
-			return Provider;
-		}
-
-		const Provider = DynamicContext.createDestructuredProvider(
-			this.mainContext as any
-		);
-		return Provider;
-	}
-
 	private rawValueToProps = (rawValue: RawValue): any => {
 		if (typeof this.key === "string") {
 			return { [this.key]: rawValue };
@@ -252,8 +274,7 @@ export class DynamicContext<
 	};
 
 	useValue = (): Value => {
-		const rawValue = this.useRawValue();
-		return this.rawToFinalValueHook(rawValue);
+		return this.useSelector((x => x) as any, []);
 	};
 
 	useProperty = <
@@ -329,43 +350,7 @@ export class DynamicContext<
 			options
 		);
 	}
-
-	private static createDestructuredProvider<Value extends {}>(
-		RawContext: React.Context<Value>
-	): MinimalComponent<Value> {
-		const Provider: React.FC<Value> = ({ children, ...rest }) => {
-			const oldValueRef = useRef(rest);
-			const newVal = areEqual(oldValueRef.current, rest)
-				? oldValueRef.current
-				: rest;
-			if (newVal !== oldValueRef.current) {
-				oldValueRef.current = newVal;
-			}
-			return (
-				<RawContext.Provider value={newVal as Value}>
-					{children}
-				</RawContext.Provider>
-			);
-		};
-		return Provider;
-	}
 }
-
-const areEqual = (obj1: object, obj2: object): boolean => {
-	if (obj1 === obj2) return true;
-	const obj1Keys = Object.keys(obj1);
-	const obj2Keys = Object.keys(obj2);
-	if (obj1Keys.length !== obj2Keys.length) return false;
-	for (let i = 0; i < obj1Keys.length; i++) {
-		if (
-			obj1Keys[i] !== obj2Keys[i] ||
-			obj1[obj1Keys[i]] !== obj2[obj2Keys[i]]
-		) {
-			return false;
-		}
-	}
-	return true;
-};
 
 export interface MinimalComponent<P = {}> {
 	(props: P & { children?: React.ReactNode }): React.ReactElement | null;
@@ -426,4 +411,59 @@ export type DynamicContextOptions<
 		nextValue: ContextSelectorArgs
 	) => boolean;
 	selectorValueEqualityFn?: (prev: any, current: any) => boolean;
+};
+
+function getRawProvider<RawValue extends any>(
+	key: string | null,
+	mainContext: React.Context<RawValue>
+): MinimalComponent<any> {
+	const RawContextProvider = mainContext.Provider;
+	if (key === "value") return RawContextProvider;
+
+	if (typeof key === "string") {
+		const Provider: React.FC<Record<string, RawValue>> = props => {
+			const value = props[key as any] as RawValue;
+			const children = props.children;
+			return (
+				<RawContextProvider value={value}>
+					{children}
+				</RawContextProvider>
+			);
+		};
+		return Provider;
+	}
+
+	const Provider = createDestructuredProvider(mainContext as any);
+	return Provider;
+}
+
+function createDestructuredProvider<Value extends {}>(
+	RawContext: React.Context<Value>
+): MinimalComponent<Value> {
+	const Provider: React.FC<Value> = ({ children, ...rest }) => {
+		const newVal = useMemoizedProps(rest);
+		return (
+			<RawContext.Provider value={newVal as Value}>
+				{children}
+			</RawContext.Provider>
+		);
+	};
+	return Provider;
+}
+
+const getDefaultValueFn = <
+	RawValue extends any,
+	UnmodifiedRawValue extends any
+>(
+	fn: () => RawValue,
+	getTransformerFn: () =>
+		| ((value: RawValue) => UnmodifiedRawValue)
+		| undefined
+): (() => UnmodifiedRawValue) => {
+	return (): UnmodifiedRawValue => {
+		const val = fn();
+		const transformer = getTransformerFn();
+		if (!transformer) return val as UnmodifiedRawValue;
+		return transformer(val);
+	};
 };

@@ -1,8 +1,5 @@
 import { useRef, useReducer } from "react";
-import {
-	depsShallowEquality,
-	propsEqualityFactory,
-} from "./equality-functions";
+import { depsShallowEquality } from "./equality-functions";
 
 type DependencyList = readonly any[];
 type EqualityFn = (
@@ -45,8 +42,6 @@ export const createMemoHook = (
 		return resultRef.current!.data;
 	};
 };
-
-export const usePropsMemo = createMemoHook(propsEqualityFactory(1));
 
 export const useForceUpdate = () => {
 	const [, forceUpdate] = useReducer(x => x + 1, 0);
