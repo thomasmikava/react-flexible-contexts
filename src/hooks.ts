@@ -1,4 +1,4 @@
-import { useRef, useReducer } from "react";
+import { useRef, useReducer, useLayoutEffect } from "react";
 import { depsShallowEquality } from "./equality-functions";
 
 type DependencyList = readonly any[];
@@ -20,26 +20,34 @@ export const createMemoHook = (
 		);
 		const depsRef = useRef(deps);
 
-		if (!resultRef.current.called) {
-			resultRef.current = {
+		let depsValue = depsRef.current;
+		let resultValue = resultRef.current;
+
+		useLayoutEffect(() => {
+			depsRef.current = depsValue;
+			resultRef.current = resultValue;
+		});
+
+		if (!resultValue.called) {
+			resultValue = {
 				called: true,
 				data: fn(),
 			};
-			return resultRef.current.data;
+			return resultValue.data;
 		}
 
 		const prevDeps = depsRef.current;
 		const haveDepsChanged = !areDepsEqual(prevDeps, deps);
 		if (haveDepsChanged) {
 			// deps have changed; recalculating output;
-			resultRef.current = {
+			resultValue = {
 				called: true,
 				data: fn(),
 			};
-			depsRef.current = deps;
+			depsValue = deps;
 		}
 
-		return resultRef.current!.data;
+		return resultValue!.data;
 	};
 };
 

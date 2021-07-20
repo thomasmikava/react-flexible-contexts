@@ -141,16 +141,6 @@ const DescendantComponent = () => {
 ```
 <br>
 
-### Known gotchas
-Since forcingly rerendering components while other components are rendered, Dynamic context asynchronously updates it's context value and there might be possible loss of cursor position when using controllable input with useSelector/useProperty/useProperties;
-
-You can call setRerenderSynchronouslyValue once in an application and pass true. the default value is false.
-```ts
-import { setRerenderSynchronouslyValue } from "react-flexible-contexts";
-setRerenderSynchronouslyValue(true);
-```
-<br>
-
 ## Stacked Context
 TL; DR: allows taking into consideration ancestor providers instead of only the closest one.
 

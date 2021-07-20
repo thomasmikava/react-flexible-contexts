@@ -33,8 +33,12 @@ export type SubscribeFn<Data extends readonly any[]> = (
 export interface ContextSubscraberValue<Data extends readonly any[]> {
 	id: number;
 	getLatestValue: () => Data;
+	useUpdateValue: (...value: Data) => void;
+	updateValue: (...value: Data) => void;
 	subscribe: SubscribeFn<Data>;
 	asyncReverseOrderSubscribe: SubscribeFn<Data>;
+	destroy: () => void;
+	isDestroyed: () => boolean;
 }
 
 type Unsubscribe = () => void;

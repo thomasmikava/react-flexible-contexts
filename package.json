@@ -32,7 +32,8 @@
     "prettier": "^1.19.1",
     "react": "^16.13.0",
     "@types/react": "16.9.41",
-    "typescript": "^3.7.5"
+    "typescript": "^3.7.5",
+    "simple-subscriptions": "0.0.1"
   },
   "publishConfig": {
     "access": "public"
@@ -40,5 +41,8 @@
   "homepage": "https://github.com/thomasmikava/react-flexible-contexts.git",
   "files": [
     "lib/**/*"
-  ]
+  ],
+  "dependencies": {
+    "simple-subscriptions": "0.0.1"
+  }
 }

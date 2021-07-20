@@ -1,7 +1,7 @@
-import React, { useContext, useRef, useState, useEffect } from "react";
+import React, { useContext, useRef, useState, useEffect, useLayoutEffect } from "react";
 import { ContextSubscriber } from "./subscriber";
-import { ContextSelectorHook } from "./subscriber/interfaces";
-import { Subscription } from "./subscriber/subscription";
+import { ContextSelectorHook, ContextSubscraberValue } from "./subscriber/interfaces";
+import { Subscription } from "simple-subscriptions";
 import { useReRenderSubscription } from "./subscriber/re-render";
 import { areDeeplyEqual } from "./equality-functions";
 import { dublicateEqualityFn } from "./subscriber/hook";
@@ -77,6 +77,7 @@ export class DynamicContext<
 			selectorArgsHook || (defaultUseContextSelectorArgs as any);
 		this.subscriberContext = new ContextSubscriber<ContextSelectorArgs>(
 			this.getSubscriberContextDefaultValue,
+			"hook",
 			selectorArgsEqualityFn
 		);
 		this.useSelector = this.subscriberContext.useSelector;
@@ -86,7 +87,12 @@ export class DynamicContext<
 	}
 
 	private getSubscriberContextDefaultValue = () => {
-		const rawValue = this.useRawValue();
+
+		const value = this.defaultValueGetter();
+		const rawValue = !this.rawValueModifierHook
+			? (value as RawValue)
+			: this.rawValueModifierHook(value);
+
 		const finalValue = this.rawToFinalValueHook(rawValue);
 		return this.selectorArgsHook(finalValue, rawValue);
 	};
@@ -146,19 +152,14 @@ export class DynamicContext<
 			this.subscriberContext.registerNewProvider
 		);
 		useEffect(() => {
-			return () =>
-				this.subscriberContext.destroyIntervalProvider(
-					internalContextData.id
-				);
-		}, []);
+			return () => internalContextData.destroy();
+		}, [internalContextData]);
+
 		const RawProvider = this.RawProvider;
 		const rawValue = this.useReconstructValue(props);
 		const finalValue = this.rawToFinalValueHook(rawValue);
 		const contextSelectorArgs = this.selectorArgsHook(finalValue, rawValue);
-		this.subscriberContext.updateLastProviderValue(
-			internalContextData.id,
-			...contextSelectorArgs
-		);
+		internalContextData.useUpdateValue(...contextSelectorArgs);
 		let lastChildren = children;
 		for (const el of this.InternalHooks.arr) {
 			const val = el.hook(finalValue);

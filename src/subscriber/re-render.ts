@@ -1,4 +1,4 @@
-import { Subscription } from "./subscription";
+import { Subscription } from "simple-subscriptions";
 import { useEffect, useReducer } from "react";
 
 export const useReRenderSubscription = (
@@ -10,7 +10,7 @@ export const useReRenderSubscription = (
 	}, []);
 };
 
-const useForceUpdate = (): (() => void) => {
+export const useForceUpdate = (): (() => void) => {
 	const [, forceUpdate] = useReducer(x => x + 1, 0);
 	return forceUpdate as any;
 };

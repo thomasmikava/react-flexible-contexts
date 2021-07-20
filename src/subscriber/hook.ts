@@ -1,19 +1,9 @@
 import { ContextSelectorHook, ContextSubscraberValue } from "./interfaces";
 import React, { useContext, useState, useRef, useLayoutEffect } from "react";
-import { createMemoHook, useForceUpdate } from "../hooks";
+import { createMemoHook } from "../hooks";
 import { depsShallowEquality } from "../equality-functions";
+import { useForceUpdate } from "./re-render";
 type DependencyList = ReadonlyArray<any>;
-
-let rerenderSynchronously = false;
-
-export const setRerenderSynchronouslyValue = (value: boolean) => {
-	if (typeof value !== "boolean") {
-		throw new Error(
-			`value of rerenderSynchronously must be boolean. received ${value}`
-		);
-	}
-	rerenderSynchronously = !!value;
-};
 
 const EMPTY_DEPS = [
 	`__$$EMPTY:%$W,w_&te-nw~[rzSETQK5{CB9V?F&+8n_m\nFZB?:fW]Y2QG$$__`,
@@ -22,7 +12,7 @@ const EMPTY_DEPS = [
 const defaultTransformer = <T extends readonly any[]>(...x: T) => x;
 export const createContextSelectorHook = <Data extends readonly any[]>(
 	context: React.Context<ContextSubscraberValue<Data>>,
-	defaultProviderId: number,
+	isDefaultHookProviderId: (id: number) => boolean,
 	useGettingDefaultValue: () => void
 ): ContextSelectorHook<Data> => {
 	let defaultEqualityFn = globallyDefaultCompare;
@@ -44,17 +34,15 @@ export const createContextSelectorHook = <Data extends readonly any[]>(
 
 		const [label] = useState(passedLabel);
 		const fnRef = useRef(fn);
-		fnRef.current = fn;
 		const areDataEqualRef = useRef(areDataEqual);
-		areDataEqualRef.current = areDataEqual;
 		const latestSubscriptionCallbackErrorRef = useRef<any>();
 
 		const forceUpdate = useForceUpdate();
 
-		const { getLatestValue, asyncReverseOrderSubscribe, id } = useContext(
+		const { getLatestValue, asyncReverseOrderSubscribe, id, isDestroyed } = useContext(
 			context
 		);
-		if (id === defaultProviderId) {
+		if (isDefaultHookProviderId(id)) {
 			useGettingDefaultValue();
 		}
 		const [transformedInitialValue] = useState(() => {
@@ -64,29 +52,30 @@ export const createContextSelectorHook = <Data extends readonly any[]>(
 
 		let selectedState: T;
 		try {
-			if (latestSubscriptionCallbackErrorRef.current) {
+			if (latestSubscriptionCallbackErrorRef.current && !isDestroyed()) {
 				selectedState = fn(...getLatestValue());
 			} else {
 				selectedState = transformedValueRef.current;
 			}
 		} catch (err) {
 			if (latestSubscriptionCallbackErrorRef.current) {
-				err.message += `\nLabel: ${label}\n`;
+				if (label !== undefined) err.message += `\nLabel: ${label}\n`;
 				err.message += `\nThe error may be correlated with this previous error:\n${latestSubscriptionCallbackErrorRef.current.stack}\n\n`;
 			}
 			throw err;
 		}
 
 		useLayoutEffect(() => {
-			transformedValueRef.current = selectedState;
 			latestSubscriptionCallbackErrorRef.current = undefined;
+			transformedValueRef.current = selectedState;
+			areDataEqualRef.current = areDataEqual;
+			fnRef.current = fn;
 		});
 
 		useLayoutEffect(() => {
 			let isCancelled = false;
-			const cb = (renderSync: boolean, ...data: Data) => {
+			const cb = (...data: Data) => {
 				if (isCancelled) return;
-				let time = 0;
 				try {
 					const value = fnRef.current(...data);
 					if (
@@ -103,26 +92,15 @@ export const createContextSelectorHook = <Data extends readonly any[]>(
 					// is re-rendered, the selectors are called again, and
 					// will throw again
 					latestSubscriptionCallbackErrorRef.current = err;
-					time = 0;
 				}
-				if (renderSync) {
-					forceUpdate();
-				} else {
-					setTimeout(() => {
-						if (isCancelled) return;
-						forceUpdate();
-					}, time);
-				}
+				forceUpdate();
 			};
 			const unsubscribe = asyncReverseOrderSubscribe(
 				(...args) =>
-					cb(rerenderSynchronously, ...((args as any) as Data)),
+					cb(...((args as any) as Data)),
 				label
 			);
-			setTimeout(() => {
-				if (isCancelled) return;
-				cb(true, ...getLatestValue());
-			}, 0);
+			cb(...getLatestValue());
 			return () => {
 				isCancelled = true;
 				unsubscribe();
@@ -130,7 +108,8 @@ export const createContextSelectorHook = <Data extends readonly any[]>(
 		}, [label]);
 
 		useCustomMemoHook(() => {
-			const value = fnRef.current(...getLatestValue());
+			if (isDestroyed()) return;
+			const value = fn(...getLatestValue());
 			if (areDataEqual(selectedState, value)) return;
 			selectedState = value;
 		}, deps);
@@ -142,7 +121,7 @@ export const createContextSelectorHook = <Data extends readonly any[]>(
 	>(fn: (...rootData: Data) => T): any {
 		const hook = createContextSelectorHook(
 			context,
-			defaultProviderId,
+			isDefaultHookProviderId,
 			useGettingDefaultValue
 		) as any;
 		const finalHook = (trans, ...args) => {

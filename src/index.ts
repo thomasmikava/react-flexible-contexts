@@ -1,6 +1,5 @@
 import { DynamicContext } from "./dynamic";
 import { StackedContext } from "./stacked";
-import { setRerenderSynchronouslyValue } from "./subscriber/hook";
 import {
 	ContextSelectorMiniHook,
 	ContextSelectorHook,
@@ -15,5 +14,4 @@ export {
 	nestData,
 	useNestedData,
 	createDeepMergeFn,
-	setRerenderSynchronouslyValue,
 };
