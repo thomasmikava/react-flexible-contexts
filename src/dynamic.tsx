@@ -1,10 +1,10 @@
-import React, { useContext, useRef, useState, useEffect, useLayoutEffect } from "react";
-import { ContextSubscriber } from "./subscriber";
-import { ContextSelectorHook, ContextSubscraberValue } from "./subscriber/interfaces";
+import React, { useContext, useRef, useState, useEffect } from "react";
+import { ContextSubscriber } from "react-context-subscribers";
+import { ContextSelectorHook } from "react-context-subscribers/lib/interfaces";
 import { Subscription } from "simple-subscriptions";
-import { useReRenderSubscription } from "./subscriber/re-render";
+import { useReRenderSubscription } from "./re-render";
 import { areDeeplyEqual } from "./equality-functions";
-import { dublicateEqualityFn } from "./subscriber/hook";
+import { dublicateEqualityFn } from "react-context-subscribers/lib//hook";
 import { useMemoizedProps } from "./utils";
 
 const EMPTY_VAL = `__$$emptyValue:?#@#y7q!}fmhW)eL}L{b#b^(3$ZAMg.eyp6NL#h<N-S$)L<.=-j3WsMp&%2JDf6_vVdN7K."pg"_aswq"9CRS?!9YzG[}AD~Xb[E__$$`;

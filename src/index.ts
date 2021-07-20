@@ -3,7 +3,7 @@ import { StackedContext } from "./stacked";
 import {
 	ContextSelectorMiniHook,
 	ContextSelectorHook,
-} from "./subscriber/interfaces";
+} from "react-context-subscribers/lib/interfaces";
 import { nestData, useNestedData, createDeepMergeFn } from "./utils";
 
 export {

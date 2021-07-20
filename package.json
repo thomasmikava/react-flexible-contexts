@@ -17,9 +17,15 @@
   "author": "Temuri Mikava",
   "license": "MIT",
   "peerDependencies": {
-    "react": ">=16.8.0"
+    "react": ">=16.8.0",
+    "@types/react": ">=16.8.0"
+  },
+  "dependencies": {
+    "simple-subscriptions": "^0.0.2",
+    "react-context-subscribers": "^0.0.1"
   },
   "devDependencies": {
+    "@types/react": "16.9.41",
     "@typescript-eslint/eslint-plugin": "^2.17.0",
     "@typescript-eslint/parser": "^2.17.0",
     "eslint": "^6.8.0",
@@ -31,9 +37,7 @@
     "eslint-plugin-react-hooks": "^2.3.0",
     "prettier": "^1.19.1",
     "react": "^16.13.0",
-    "@types/react": "16.9.41",
-    "typescript": "^3.7.5",
-    "simple-subscriptions": "0.0.1"
+    "typescript": "^3.7.5"
   },
   "publishConfig": {
     "access": "public"
@@ -41,8 +45,5 @@
   "homepage": "https://github.com/thomasmikava/react-flexible-contexts.git",
   "files": [
     "lib/**/*"
-  ],
-  "dependencies": {
-    "simple-subscriptions": "0.0.1"
-  }
+  ]
 }
