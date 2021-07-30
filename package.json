@@ -21,8 +21,8 @@
     "@types/react": ">=16.8.0"
   },
   "dependencies": {
-    "simple-subscriptions": "^0.0.2",
-    "react-context-subscribers": "^0.0.1"
+    "simple-subscriptions": "^0.0.3",
+    "react-context-subscribers": "^0.0.2"
   },
   "devDependencies": {
     "@types/react": "16.9.41",
